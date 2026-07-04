@@ -1,0 +1,346 @@
+# =============================================
+# PYTHON
+# =============================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+venv*/
+env*/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# =============================================
+# DATABASES
+# =============================================
+
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# PostgreSQL
+*.pgsql
+*.sql
+dump.rdb
+
+# =============================================
+# IDE / EDITOR
+# =============================================
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+.vscode-test/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Atom
+.atom/
+.config/
+
+# Vim
+*.swp
+*.swo
+*~
+.*.swp
+.*.swo
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Eclipse
+.project
+.classpath
+.settings/
+*.pydevproject
+
+# NetBeans
+nbproject/
+
+# =============================================
+# OS / SYSTEM
+# =============================================
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.DS_Store
+*.dll
+*.exe
+*.msi
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+*.swo
+*~
+.fseventsd
+
+# Linux
+*.tmp
+*.swp
+*.pid
+*.lock
+.directory
+.directory-locked
+
+# =============================================
+# LOGS
+# =============================================
+
+*.log
+logs/
+*.log.*
+logfile*
+debug.log
+error.log
+access.log
+*.log.gz
+
+# =============================================
+# SECRETS / CREDENTIALS
+# =============================================
+
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.key
+*.pem
+*.crt
+*.csr
+*.private
+*.secret
+secrets/
+credentials/
+*.p12
+*.pfx
+*.keystore
+*.jks
+
+# =============================================
+# MEDIA / UPLOADS
+# =============================================
+
+media/
+uploads/
+staticfiles/
+static/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.mp3
+*.wav
+*.flac
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.svg
+*.ico
+*.webp
+
+# =============================================
+# DEPLOYMENT / SERVER
+# =============================================
+
+*.pid
+*.sock
+*.socket
+*.pid.lock
+gunicorn.pid
+celery.pid
+
+# =============================================
+# DEPENDENCY LOCK FILES (optional)
+# =============================================
+
+# Si usas poetry, descomenta:
+# poetry.lock
+
+# Si usas pipenv, descomenta:
+# Pipfile.lock
+
+# =============================================
+# MISC
+# =============================================
+
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.patch
+*.diff
+*.tmp
+*.temp
+*.cache
+.cache/
+*.min.js
+*.min.css
+*.map
+node_modules/
+bower_components/
+package-lock.json
+yarn.lock
