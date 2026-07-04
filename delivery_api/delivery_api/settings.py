@@ -1,16 +1,21 @@
+# delivery_api/settings.py
 import os
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Cargar variables de entorno desde .env
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # ✅ Esto apunta a la carpeta padre
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-your-secret-key-here'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-your-secret-key-here')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -20,20 +25,20 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third party apps
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
-    
-    # Local apps
-    'users',
-    'common',
+
+    # Local apps - Importante: sin prefijo porque están al mismo nivel
+    'users',    # ✅ Así debe ser
+    'common',   # ✅ Así debe ser
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Debe ir primero
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -42,7 +47,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'delivery_api.urls'
+ROOT_URLCONF = 'delivery_api.urls'  # ✅ Así debe ser
 
 TEMPLATES = [
     {
@@ -66,11 +71,11 @@ WSGI_APPLICATION = 'delivery_api.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'delivery_db',
-        'USER': 'postgres',
-        'PASSWORD': '12345',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME', 'delivery_db'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
@@ -98,22 +103,18 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS Configuration - Permitir todas las apps
-CORS_ALLOW_ALL_ORIGINS = True  # Solo para desarrollo
-
-# O configurar específicamente
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Vue.js App Web Restaurante
-    "http://localhost:3001",  # Vue.js App Web Gestión
-    "http://localhost:8080",  # Flutter App Cliente
-    "http://localhost:8081",  # Flutter App Repartidor
-    "http://localhost:8082",  # Flutter App Restaurante
-    "http://127.0.0.1:8000",
-]
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173').split(',')
 
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
@@ -150,4 +151,13 @@ SIMPLE_JWT = {
 }
 
 # Custom User Model
-AUTH_USER_MODEL = 'users.User'
+AUTH_USER_MODEL = 'users.User'  # ✅ Así debe ser
+
+# Security settings for production
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True

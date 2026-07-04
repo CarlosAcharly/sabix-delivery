@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import logout
+from rest_framework.permissions import AllowAny
 from .models import User
 from .serializers import (
     UserRegistrationSerializer, 
@@ -139,3 +140,28 @@ class CustomTokenRefreshView(TokenRefreshView):
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+class APIRootView(APIView):
+    """
+    Vista raíz de la API de usuarios
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        return Response({
+            'status': 'success',
+            'message': 'Bienvenido a la API de Delivery Platform',
+            'endpoints': {
+                'registro': '/api/v1/users/register/',
+                'login': '/api/v1/users/login/',
+                'logout': '/api/v1/users/logout/',
+                'perfil': '/api/v1/users/profile/',
+                'cambiar_contraseña': '/api/v1/users/change-password/',
+                'refrescar_token': '/api/v1/users/token/refresh/',
+                'verificar_username': '/api/v1/users/check-username/?username=valor',
+                'verificar_email': '/api/v1/users/check-email/?email=valor',
+            },
+            'documentacion': 'Próximamente...'
+        })

@@ -7,10 +7,14 @@ from .views import (
     PasswordChangeView,
     CheckUsernameView,
     CheckEmailView,
-    CustomTokenRefreshView
+    CustomTokenRefreshView,
+    APIRootView  # <-- Importar la nueva vista
 )
 
 urlpatterns = [
+    # Raíz de la API (para que /api/v1/users/ no dé 404)
+    path('', APIRootView.as_view(), name='api-root'),  # <-- NUEVO
+    
     # Autenticación
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
