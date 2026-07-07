@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     # Local apps - Importante: sin prefijo porque están al mismo nivel
     'users',    # ✅ Así debe ser
     'common',   # ✅ Así debe ser
+    'django_filters',  # Agregar
+
 ]
 
 MIDDLEWARE = [
@@ -131,6 +133,9 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.MultiPartParser',
         'rest_framework.parsers.FormParser',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
     ],
 }
 

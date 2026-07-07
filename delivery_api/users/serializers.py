@@ -145,3 +145,83 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class UserTokenRefreshSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+
+    # =============================================
+# SERIALIZERS PARA ADMINISTRACIÓN
+# =============================================
+
+class AdminUserListSerializer(serializers.ModelSerializer):
+    """
+    Serializer para listar usuarios en el panel de administración
+    """
+    full_name = serializers.SerializerMethodField()
+    user_type_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'full_name', 'phone',
+            'user_type', 'user_type_display', 'is_active',
+            'is_restaurant_verified', 'created_at', 'updated_at'
+        ]
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+    
+    def get_user_type_display(self, obj):
+        return obj.get_user_type_display()
+
+class AdminUserDetailSerializer(serializers.ModelSerializer):
+    """
+    Serializer para detalle de usuario en el panel de administración
+    """
+    full_name = serializers.SerializerMethodField()
+    user_type_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = '__all__'  # Incluye todos los campos
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+    
+    def get_user_type_display(self, obj):
+        return obj.get_user_type_display()
+
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer para actualizar usuarios desde el panel de administración
+    """
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'email', 'phone',
+            'user_type', 'is_active', 'is_restaurant_verified',
+            'address', 'vehicle_type', 'vehicle_plate', 'is_available',
+            'restaurant_name', 'restaurant_description', 'restaurant_address',
+            'restaurant_phone'
+        ]
+    
+    def update(self, instance, validated_data):
+        # Permitir actualizar cualquier campo (solo admin)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+class AdminUserStatsSerializer(serializers.Serializer):
+    """
+    Serializer para estadísticas de usuarios
+    """
+    total_users = serializers.IntegerField()
+    total_clients = serializers.IntegerField()
+    total_deliveries = serializers.IntegerField()
+    total_restaurants = serializers.IntegerField()
+    total_admins = serializers.IntegerField()
+    active_users = serializers.IntegerField()
+    inactive_users = serializers.IntegerField()
+    verified_restaurants = serializers.IntegerField()
+    unverified_restaurants = serializers.IntegerField()
+    available_deliveries = serializers.IntegerField()
+    unavailable_deliveries = serializers.IntegerField()
+    recent_users = serializers.ListField(child=serializers.DictField())

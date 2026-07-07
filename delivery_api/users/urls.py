@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    # Autenticación
     RegisterView,
     LoginView,
     UserProfileView,
@@ -8,14 +9,26 @@ from .views import (
     CheckUsernameView,
     CheckEmailView,
     CustomTokenRefreshView,
-    APIRootView  # <-- Importar la nueva vista
+    APIRootView,
+    
+    # Administración de usuarios (NUEVAS)
+    AdminUserListView,
+    AdminUserDetailView,
+    AdminUserToggleActiveView,
+    AdminUserToggleVerifyView,
+    AdminUserStatsView,
+    AdminUserFilterView,
 )
 
 urlpatterns = [
-    # Raíz de la API (para que /api/v1/users/ no dé 404)
-    path('', APIRootView.as_view(), name='api-root'),  # <-- NUEVO
+    # =============================================
+    # RAÍZ DE LA API
+    # =============================================
+    path('', APIRootView.as_view(), name='api-root'),
     
-    # Autenticación
+    # =============================================
+    # AUTENTICACIÓN
+    # =============================================
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
@@ -23,7 +36,19 @@ urlpatterns = [
     path('change-password/', PasswordChangeView.as_view(), name='change-password'),
     path('token/refresh/', CustomTokenRefreshView.as_view(), name='token-refresh'),
     
-    # Validaciones
+    # =============================================
+    # VALIDACIONES
+    # =============================================
     path('check-username/', CheckUsernameView.as_view(), name='check-username'),
     path('check-email/', CheckEmailView.as_view(), name='check-email'),
+    
+    # =============================================
+    # ADMINISTRACIÓN DE USUARIOS (SOLO ADMIN)
+    # =============================================
+    path('admin/users/', AdminUserListView.as_view(), name='admin-user-list'),
+    path('admin/users/filter/', AdminUserFilterView.as_view(), name='admin-user-filter'),
+    path('admin/users/<int:id>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('admin/users/<int:user_id>/toggle-active/', AdminUserToggleActiveView.as_view(), name='admin-user-toggle-active'),
+    path('admin/users/<int:user_id>/toggle-verify/', AdminUserToggleVerifyView.as_view(), name='admin-user-toggle-verify'),
+    path('admin/stats/', AdminUserStatsView.as_view(), name='admin-stats'),
 ]
