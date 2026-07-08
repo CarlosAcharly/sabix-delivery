@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'users',    # ✅ Así debe ser
     'common',   # ✅ Así debe ser
     'django_filters',  # Agregar
+    'products',  # ✅ Así debe ser
 
 ]
 
