@@ -9,6 +9,7 @@ urlpatterns = [
     # Incluir las URLs de users
     path('api/v1/users/', include('users.urls')),  # ✅ Así debe ser
     path('api/v1/auth/', include('users.urls')),   # ✅ Así debe ser
+    path('api/v1/products/', include('products.urls')),  # ✅ AGREGAR ESTA LÍNEA
 ]
 
 # Solo para desarrollo - servir archivos estáticos y media
