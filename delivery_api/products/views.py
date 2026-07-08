@@ -1,7 +1,7 @@
 from rest_framework import generics, status, permissions, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from django.db.models import Q
@@ -69,6 +69,8 @@ class RestaurantCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
             return RestaurantCategory.objects.all()
         if self.request.user.is_restaurant_owner:
             return RestaurantCategory.objects.filter(restaurant=self.request.user)
+        if self.request.method not in SAFE_METHODS:
+            return RestaurantCategory.objects.none()
         return RestaurantCategory.objects.filter(is_active=True)
 
 # =============================================
@@ -120,6 +122,8 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Product.objects.all()
         if self.request.user.is_restaurant_owner:
             return Product.objects.filter(restaurant=self.request.user)
+        if self.request.method not in SAFE_METHODS:
+            return Product.objects.none()
         return Product.objects.filter(is_available=True)
 
 # =============================================

@@ -116,11 +116,31 @@ class ProductCreateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         # Validar que el precio con descuento sea menor que el precio normal
-        if data.get('discount_price') and data.get('price'):
-            if data['discount_price'] >= data['price']:
+        price = data.get('price', self.instance.price if self.instance else None)
+        discount_price = data.get(
+            'discount_price',
+            self.instance.discount_price if self.instance else None,
+        )
+
+        if discount_price is not None and price is not None and discount_price >= price:
+            raise serializers.ValidationError({
+                'discount_price': 'El precio con descuento debe ser menor que el precio normal.'
+            })
+
+        category = data.get('category')
+        if category:
+            request = self.context.get('request')
+            user = getattr(request, 'user', None)
+            restaurant = self.instance.restaurant if self.instance else None
+
+            if not restaurant and user and user.is_restaurant_owner:
+                restaurant = user
+
+            if restaurant and category.restaurant_id != restaurant.id:
                 raise serializers.ValidationError({
-                    'discount_price': 'El precio con descuento debe ser menor que el precio normal.'
+                    'category': 'La categoria debe pertenecer al restaurante del producto.'
                 })
+
         return data
     
     def create(self, validated_data):
@@ -134,6 +154,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     final_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     image_url = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
