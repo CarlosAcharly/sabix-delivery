@@ -72,17 +72,16 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Agregar app_type a los datos del serializer
-        request.data._mutable = True
-        request.data['app_type'] = app_type
-        request.data._mutable = False
+        # Crear una copia de los datos para poder modificarlos
+        data = request.data.copy()
+        data['app_type'] = app_type
         
-        serializer = UserLoginSerializer(data=request.data)
+        serializer = UserLoginSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 # =============================================
-# LOGIN ESPECÍFICOS POR APP
+# LOGIN ESPECÍFICOS POR APP (VERSIÓN CORREGIDA)
 # =============================================
 
 class ClientLoginView(APIView):
@@ -93,11 +92,11 @@ class ClientLoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        request.data._mutable = True
-        request.data['app_type'] = 'client'
-        request.data._mutable = False
+        # Crear una copia de los datos para poder modificarlos
+        data = request.data.copy()
+        data['app_type'] = 'client'
         
-        serializer = UserLoginSerializer(data=request.data)
+        serializer = UserLoginSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
@@ -109,11 +108,10 @@ class DeliveryLoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        request.data._mutable = True
-        request.data['app_type'] = 'delivery'
-        request.data._mutable = False
+        data = request.data.copy()
+        data['app_type'] = 'delivery'
         
-        serializer = UserLoginSerializer(data=request.data)
+        serializer = UserLoginSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
@@ -125,11 +123,10 @@ class RestaurantLoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        request.data._mutable = True
-        request.data['app_type'] = 'restaurant'
-        request.data._mutable = False
+        data = request.data.copy()
+        data['app_type'] = 'restaurant'
         
-        serializer = UserLoginSerializer(data=request.data)
+        serializer = UserLoginSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
@@ -141,13 +138,28 @@ class AdminWebLoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        request.data._mutable = True
-        request.data['app_type'] = 'admin_web'
-        request.data._mutable = False
-        
-        serializer = UserLoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        try:
+            # Crear una copia de los datos para poder modificarlos
+            data = request.data.copy()
+            data['app_type'] = 'admin_web'
+            
+            serializer = UserLoginSerializer(data=data)
+            
+            if serializer.is_valid():
+                return Response(serializer.validated_data, status=status.HTTP_200_OK)
+            
+            # Si hay errores de validación, devolverlos
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            # Capturar cualquier error y devolverlo
+            import traceback
+            print(f"Error en AdminWebLoginView: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'Error interno del servidor: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class RestaurantWebLoginView(APIView):
     """
@@ -157,11 +169,10 @@ class RestaurantWebLoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        request.data._mutable = True
-        request.data['app_type'] = 'restaurant_web'
-        request.data._mutable = False
+        data = request.data.copy()
+        data['app_type'] = 'restaurant_web'
         
-        serializer = UserLoginSerializer(data=request.data)
+        serializer = UserLoginSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
 

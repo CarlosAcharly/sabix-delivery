@@ -59,35 +59,43 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserLoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
-    app_type = serializers.CharField(required=False, write_only=True)  # NUEVO: tipo de app que está iniciando sesión
+    app_type = serializers.CharField(required=False, write_only=True, default='client')
     
     def validate(self, attrs):
-        username = attrs.get('username')
-        password = attrs.get('password')
-        app_type = attrs.get('app_type', 'client')  # Por defecto 'client'
-        
-        user = authenticate(username=username, password=password)
-        
-        if not user:
-            raise serializers.ValidationError("Credenciales inválidas.")
-        
-        if not user.is_active:
-            raise serializers.ValidationError("Usuario inactivo.")
-        
-        # =============================================
-        # NUEVA VALIDACIÓN: Verificar tipo de usuario vs app
-        # =============================================
-        validation_error = self.validate_user_app_type(user, app_type)
-        if validation_error:
-            raise serializers.ValidationError(validation_error)
-        
-        refresh = RefreshToken.for_user(user)
-        
-        return {
-            'user': UserSerializer(user).data,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }
+        try:
+            username = attrs.get('username')
+            password = attrs.get('password')
+            app_type = attrs.get('app_type', 'client')
+            
+            # Autenticar usuario
+            user = authenticate(username=username, password=password)
+            
+            if not user:
+                raise serializers.ValidationError("Credenciales inválidas.")
+            
+            if not user.is_active:
+                raise serializers.ValidationError("Usuario inactivo.")
+            
+            # Validar tipo de usuario vs app
+            validation_error = self.validate_user_app_type(user, app_type)
+            if validation_error:
+                raise serializers.ValidationError(validation_error)
+            
+            # Generar tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return {
+                'user': UserSerializer(user).data,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+        except serializers.ValidationError:
+            raise
+        except Exception as e:
+            import traceback
+            print(f"Error en UserLoginSerializer: {str(e)}")
+            print(traceback.format_exc())
+            raise serializers.ValidationError(f"Error en validación: {str(e)}")
     
     def validate_user_app_type(self, user, app_type):
         """
@@ -97,9 +105,9 @@ class UserLoginSerializer(serializers.Serializer):
         APP_USER_TYPE_MAP = {
             'client': ['client'],
             'delivery': ['delivery'],
-            'restaurant': ['restaurant', 'admin'],  # Admin también puede acceder a app de restaurante
-            'admin_web': ['admin'],  # App web de administración solo para admins
-            'restaurant_web': ['restaurant', 'admin'],  # App web de restaurante
+            'restaurant': ['restaurant', 'admin'],
+            'admin_web': ['admin'],
+            'restaurant_web': ['restaurant', 'admin'],
         }
         
         allowed_types = APP_USER_TYPE_MAP.get(app_type, ['client'])
@@ -117,7 +125,7 @@ class UserLoginSerializer(serializers.Serializer):
             return f"Este usuario no tiene permisos para acceder a {app_name}. Tipo de usuario: {user.get_user_type_display()}"
         
         return None
-        
+
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     
@@ -218,7 +226,7 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = '__all__'  # Incluye todos los campos
+        fields = '__all__'
     
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
@@ -241,7 +249,6 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         ]
     
     def update(self, instance, validated_data):
-        # Permitir actualizar cualquier campo (solo admin)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
