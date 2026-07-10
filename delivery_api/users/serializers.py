@@ -59,10 +59,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserLoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
+    app_type = serializers.CharField(required=False, write_only=True)  # NUEVO: tipo de app que está iniciando sesión
     
     def validate(self, attrs):
         username = attrs.get('username')
         password = attrs.get('password')
+        app_type = attrs.get('app_type', 'client')  # Por defecto 'client'
         
         user = authenticate(username=username, password=password)
         
@@ -72,6 +74,13 @@ class UserLoginSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError("Usuario inactivo.")
         
+        # =============================================
+        # NUEVA VALIDACIÓN: Verificar tipo de usuario vs app
+        # =============================================
+        validation_error = self.validate_user_app_type(user, app_type)
+        if validation_error:
+            raise serializers.ValidationError(validation_error)
+        
         refresh = RefreshToken.for_user(user)
         
         return {
@@ -79,7 +88,36 @@ class UserLoginSerializer(serializers.Serializer):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         }
-
+    
+    def validate_user_app_type(self, user, app_type):
+        """
+        Valida que el usuario tenga el tipo correcto para la aplicación
+        """
+        # Mapeo de tipos de app a tipos de usuario permitidos
+        APP_USER_TYPE_MAP = {
+            'client': ['client'],
+            'delivery': ['delivery'],
+            'restaurant': ['restaurant', 'admin'],  # Admin también puede acceder a app de restaurante
+            'admin_web': ['admin'],  # App web de administración solo para admins
+            'restaurant_web': ['restaurant', 'admin'],  # App web de restaurante
+        }
+        
+        allowed_types = APP_USER_TYPE_MAP.get(app_type, ['client'])
+        
+        if user.user_type not in allowed_types:
+            app_names = {
+                'client': 'aplicación de cliente',
+                'delivery': 'aplicación de repartidor',
+                'restaurant': 'aplicación de restaurante',
+                'admin_web': 'panel de administración',
+                'restaurant_web': 'panel de restaurante'
+            }
+            app_name = app_names.get(app_type, 'esta aplicación')
+            
+            return f"Este usuario no tiene permisos para acceder a {app_name}. Tipo de usuario: {user.get_user_type_display()}"
+        
+        return None
+        
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     

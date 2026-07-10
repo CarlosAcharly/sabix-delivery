@@ -3,6 +3,11 @@ from .views import (
     # Autenticación
     RegisterView,
     LoginView,
+    ClientLoginView,
+    DeliveryLoginView,
+    RestaurantLoginView,
+    AdminWebLoginView,
+    RestaurantWebLoginView,
     UserProfileView,
     LogoutView,
     PasswordChangeView,
@@ -11,7 +16,7 @@ from .views import (
     CustomTokenRefreshView,
     APIRootView,
     
-    # Administración de usuarios (NUEVAS)
+    # Administración de usuarios
     AdminUserListView,
     AdminUserDetailView,
     AdminUserToggleActiveView,
@@ -27,10 +32,27 @@ urlpatterns = [
     path('', APIRootView.as_view(), name='api-root'),
     
     # =============================================
-    # AUTENTICACIÓN
+    # REGISTRO
     # =============================================
     path('register/', RegisterView.as_view(), name='register'),
-    path('login/', LoginView.as_view(), name='login'),
+    
+    # =============================================
+    # LOGIN POR TIPO DE APP (NUEVO - RECOMENDADO)
+    # =============================================
+    path('login/client/', ClientLoginView.as_view(), name='client-login'),
+    path('login/delivery/', DeliveryLoginView.as_view(), name='delivery-login'),
+    path('login/restaurant/', RestaurantLoginView.as_view(), name='restaurant-login'),
+    path('login/admin/', AdminWebLoginView.as_view(), name='admin-web-login'),
+    path('login/restaurant-web/', RestaurantWebLoginView.as_view(), name='restaurant-web-login'),
+    
+    # =============================================
+    # LOGIN GENÉRICO (CON app_type EN BODY/HEADER)
+    # =============================================
+    path('login/', LoginView.as_view(), name='login'),  # Mantener para compatibilidad
+    
+    # =============================================
+    # PERFIL Y AUTENTICACIÓN
+    # =============================================
     path('logout/', LogoutView.as_view(), name='logout'),
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('change-password/', PasswordChangeView.as_view(), name='change-password'),

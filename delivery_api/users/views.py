@@ -16,12 +16,16 @@ from .serializers import (
     PasswordChangeSerializer,
     UserTokenRefreshSerializer,
     
-    # NUEVOS Serializers de Administración
+    # Serializers de Administración
     AdminUserListSerializer,
     AdminUserDetailSerializer,
     AdminUserUpdateSerializer,
     AdminUserStatsSerializer,
 )
+
+# =============================================
+# REGISTRO DE USUARIOS
+# =============================================
 
 class RegisterView(generics.CreateAPIView):
     """
@@ -46,16 +50,124 @@ class RegisterView(generics.CreateAPIView):
             'message': 'Usuario registrado exitosamente'
         }, status=status.HTTP_201_CREATED)
 
+# =============================================
+# LOGIN GENÉRICO (Con verificación de app_type)
+# =============================================
+
 class LoginView(APIView):
     """
-    Vista para iniciar sesión
+    Vista para iniciar sesión con verificación de tipo de usuario
     """
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
+        # Obtener el tipo de app del body o del header
+        app_type = request.data.get('app_type') or request.headers.get('X-App-Type', 'client')
+        
+        # Validar que app_type sea válido
+        valid_app_types = ['client', 'delivery', 'restaurant', 'admin_web', 'restaurant_web']
+        if app_type not in valid_app_types:
+            return Response(
+                {'error': f'Tipo de aplicación inválido. Opciones: {", ".join(valid_app_types)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Agregar app_type a los datos del serializer
+        request.data._mutable = True
+        request.data['app_type'] = app_type
+        request.data._mutable = False
+        
         serializer = UserLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+# =============================================
+# LOGIN ESPECÍFICOS POR APP
+# =============================================
+
+class ClientLoginView(APIView):
+    """
+    Login exclusivo para la app de Cliente
+    Solo usuarios con user_type='client' pueden acceder
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        request.data._mutable = True
+        request.data['app_type'] = 'client'
+        request.data._mutable = False
+        
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+class DeliveryLoginView(APIView):
+    """
+    Login exclusivo para la app de Repartidor
+    Solo usuarios con user_type='delivery' pueden acceder
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        request.data._mutable = True
+        request.data['app_type'] = 'delivery'
+        request.data._mutable = False
+        
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+class RestaurantLoginView(APIView):
+    """
+    Login exclusivo para la app de Restaurante
+    Usuarios con user_type='restaurant' o 'admin' pueden acceder
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        request.data._mutable = True
+        request.data['app_type'] = 'restaurant'
+        request.data._mutable = False
+        
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+class AdminWebLoginView(APIView):
+    """
+    Login exclusivo para el Panel de Administración Web
+    Solo usuarios con user_type='admin' pueden acceder
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        request.data._mutable = True
+        request.data['app_type'] = 'admin_web'
+        request.data._mutable = False
+        
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+class RestaurantWebLoginView(APIView):
+    """
+    Login exclusivo para el Panel Web de Restaurante
+    Usuarios con user_type='restaurant' o 'admin' pueden acceder
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        request.data._mutable = True
+        request.data['app_type'] = 'restaurant_web'
+        request.data._mutable = False
+        
+        serializer = UserLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+# =============================================
+# PERFIL DE USUARIO
+# =============================================
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     """
@@ -77,6 +189,10 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         serializer = UserSerializer(instance)
         return Response(serializer.data)
 
+# =============================================
+# LOGOUT
+# =============================================
+
 class LogoutView(APIView):
     """
     Vista para cerrar sesión (invalida el token refresh)
@@ -93,6 +209,10 @@ class LogoutView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+# =============================================
+# CAMBIO DE CONTRASEÑA
+# =============================================
+
 class PasswordChangeView(APIView):
     """
     Vista para cambiar contraseña
@@ -108,6 +228,10 @@ class PasswordChangeView(APIView):
         user.save()
         
         return Response({'message': 'Contraseña actualizada exitosamente'}, status=status.HTTP_200_OK)
+
+# =============================================
+# VALIDACIONES
+# =============================================
 
 class CheckUsernameView(APIView):
     """
@@ -137,6 +261,10 @@ class CheckEmailView(APIView):
         exists = User.objects.filter(email=email).exists()
         return Response({'email': email, 'available': not exists})
 
+# =============================================
+# REFRESH TOKEN
+# =============================================
+
 class CustomTokenRefreshView(TokenRefreshView):
     """
     Vista personalizada para refrescar token JWT
@@ -148,8 +276,10 @@ class CustomTokenRefreshView(TokenRefreshView):
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
 
+# =============================================
+# RAÍZ DE LA API
+# =============================================
 
 class APIRootView(APIView):
     """
@@ -164,23 +294,29 @@ class APIRootView(APIView):
             'endpoints': {
                 'registro': '/api/v1/users/register/',
                 'login': '/api/v1/users/login/',
+                'login_client': '/api/v1/users/login/client/',
+                'login_delivery': '/api/v1/users/login/delivery/',
+                'login_restaurant': '/api/v1/users/login/restaurant/',
+                'login_admin': '/api/v1/users/login/admin/',
+                'login_restaurant_web': '/api/v1/users/login/restaurant-web/',
                 'logout': '/api/v1/users/logout/',
                 'perfil': '/api/v1/users/profile/',
                 'cambiar_contraseña': '/api/v1/users/change-password/',
                 'refrescar_token': '/api/v1/users/token/refresh/',
                 'verificar_username': '/api/v1/users/check-username/?username=valor',
                 'verificar_email': '/api/v1/users/check-email/?email=valor',
+                'admin_usuarios': '/api/v1/users/admin/users/',
+                'admin_stats': '/api/v1/users/admin/stats/',
             },
             'documentacion': 'Próximamente...'
         })
-    
-    # =============================================
-# VISTAS PARA ADMINISTRACIÓN DE USUARIOS
+
+# =============================================
+# ADMINISTRACIÓN DE USUARIOS
 # =============================================
 
-from rest_framework import viewsets, filters
+from rest_framework import filters
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Q
 
 class AdminUserListView(generics.ListAPIView):
     """
