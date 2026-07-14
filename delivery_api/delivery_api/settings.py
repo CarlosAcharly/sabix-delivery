@@ -32,10 +32,11 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
 
     # Local apps - Importante: sin prefijo porque están al mismo nivel
-    'users',    # ✅ Así debe ser
-    'common',   # ✅ Así debe ser
-    'django_filters',  # Agregar
-    'products',  # ✅ Así debe ser
+    'users',   
+    'common',   
+    'django_filters',  
+    'products',  
+    'orders',
 
 ]
 

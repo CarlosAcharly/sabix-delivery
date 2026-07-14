@@ -7,9 +7,14 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Incluir las URLs de users
-    path('api/v1/users/', include('users.urls')),  # ✅ Así debe ser
-    path('api/v1/auth/', include('users.urls')),   # ✅ Así debe ser
-    path('api/v1/products/', include('products.urls')),  # ✅ AGREGAR ESTA LÍNEA
+    path('api/v1/users/', include('users.urls')),  
+    path('api/v1/auth/', include('users.urls')),   
+    path('api/v1/products/', include('products.urls')), 
+    
+     # =============================================
+    # ORDERS API - NUEVO
+    # =============================================
+    path('api/v1/orders/', include('orders.urls')),
 ]
 
 # Solo para desarrollo - servir archivos estáticos y media
