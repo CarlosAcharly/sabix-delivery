@@ -130,17 +130,17 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items')
         client = self.context['request'].user
         
-        # Crear el pedido
+        # Crear el pedido - CORREGIDO: restaurant en lugar de restaurant_id
         order = Order.objects.create(
             client=client,
-            restaurant_id=validated_data['restaurant'],
+            restaurant=validated_data['restaurant'],  # ✅ CAMBIO IMPORTANTE
             delivery_address=validated_data['delivery_address'],
             delivery_lat=validated_data.get('delivery_lat'),
             delivery_lng=validated_data.get('delivery_lng'),
             delivery_notes=validated_data.get('delivery_notes', ''),
             payment_method=validated_data.get('payment_method', 'cash'),
             notes=validated_data.get('notes', ''),
-            delivery_fee=Decimal('0.00'),  # Se calculará después
+            delivery_fee=Decimal('0.00'),
             subtotal=Decimal('0.00'),
             total=Decimal('0.00'),
             status='pending'
@@ -182,8 +182,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Actualizar el pedido con los totales
         order.subtotal = subtotal
-        # Calcular delivery_fee según lógica de negocio
-        order.delivery_fee = Decimal('0.00')  # Por ahora sin costo de envío
+        order.delivery_fee = Decimal('0.00')
         order.total = subtotal + order.delivery_fee
         order.save()
         

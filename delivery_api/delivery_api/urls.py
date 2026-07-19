@@ -15,6 +15,10 @@ urlpatterns = [
     # ORDERS API - NUEVO
     # =============================================
     path('api/v1/orders/', include('orders.urls')),
+     # =============================================
+    # NOTIFICATIONS API - NUEVO
+    # =============================================
+    path('api/v1/notifications/', include('notifications.urls')),
 ]
 
 # Solo para desarrollo - servir archivos estáticos y medias
