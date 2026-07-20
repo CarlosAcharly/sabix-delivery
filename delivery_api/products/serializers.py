@@ -64,6 +64,7 @@ class ProductOptionSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     """Serializer principal para productos"""
     restaurant_name = serializers.SerializerMethodField()
+    restaurant_id = serializers.SerializerMethodField()  # ✅ NUEVO
     category_name = serializers.SerializerMethodField()
     global_category_name = serializers.SerializerMethodField()
     final_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -75,7 +76,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'restaurant', 'restaurant_name', 'category', 'category_name',
+            'id', 'restaurant', 'restaurant_id', 'restaurant_name', 'category', 'category_name',  # ✅ Agregar restaurant_id
             'global_category', 'global_category_name', 'name', 'description',
             'price', 'discount_price', 'final_price', 'has_discount',
             'image', 'image_alt', 'is_available', 'is_featured', 'stock',
@@ -88,6 +89,9 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_restaurant_name(self, obj):
         return obj.restaurant.restaurant_name if obj.restaurant else None
     
+    def get_restaurant_id(self, obj):  # ✅ NUEVO MÉTODO
+        return obj.restaurant.id if obj.restaurant else None
+    
     def get_category_name(self, obj):
         return obj.category.name if obj.category else None
     
@@ -95,11 +99,9 @@ class ProductSerializer(serializers.ModelSerializer):
         return obj.global_category.name if obj.global_category else None
     
     def get_average_rating(self, obj):
-        # Aquí calcularías el rating promedio (lo implementaremos después)
         return None
     
     def get_total_reviews(self, obj):
-        # Aquí contarías las reviews (lo implementaremos después)
         return 0
 
 class ProductCreateSerializer(serializers.ModelSerializer):
@@ -151,6 +153,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
 class ProductListSerializer(serializers.ModelSerializer):
     """Serializer ligero para listar productos"""
     restaurant_name = serializers.SerializerMethodField()
+    restaurant_id = serializers.SerializerMethodField()  # ✅ NUEVO
     category_name = serializers.SerializerMethodField()
     final_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     image_url = serializers.SerializerMethodField()
@@ -161,12 +164,15 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'price', 'discount_price', 
             'final_price', 'image', 'image_url', 'is_available', 
-            'is_featured', 'restaurant_name', 'category_name',
+            'is_featured', 'restaurant_id', 'restaurant_name', 'category_name',  # ✅ Agregar restaurant_id
             'average_rating', 'created_at'
         ]
     
     def get_restaurant_name(self, obj):
         return obj.restaurant.restaurant_name if obj.restaurant else None
+    
+    def get_restaurant_id(self, obj):  # ✅ NUEVO MÉTODO
+        return obj.restaurant.id if obj.restaurant else None
     
     def get_category_name(self, obj):
         return obj.category.name if obj.category else None
@@ -177,5 +183,4 @@ class ProductListSerializer(serializers.ModelSerializer):
         return None
     
     def get_average_rating(self, obj):
-        # Aquí calcularías el rating promedio
         return None
