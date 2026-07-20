@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from django.db import transaction
 from decimal import Decimal
-from .models import Order, OrderItem, DeliveryTracking
+
+from django.conf import settings  
+from .models import DeliveryAssignment, Order, OrderItem, DeliveryTracking
 from products.models import Product
 from products.serializers import ProductSerializer
 
@@ -240,3 +242,49 @@ class DeliveryLocationSerializer(serializers.Serializer):
     lat = serializers.DecimalField(max_digits=10, decimal_places=7)
     lng = serializers.DecimalField(max_digits=10, decimal_places=7)
     order_id = serializers.IntegerField()
+
+    # =============================================
+# SERIALIZERS PARA ASIGNACIÓN DE REPARTIDORES
+# =============================================
+
+class DeliveryPersonSerializer(serializers.ModelSerializer):
+    """Serializer para repartidores en búsqueda"""
+    full_name = serializers.SerializerMethodField()
+    distance_km = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    estimated_time = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = settings.AUTH_USER_MODEL
+        fields = [
+            'id', 'username', 'full_name', 'phone',
+            'distance_km', 'estimated_time', 'is_available',
+            'current_location_lat', 'current_location_lng'
+        ]
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+class DeliveryAssignmentSerializer(serializers.ModelSerializer):
+    """Serializer para asignaciones de repartidores"""
+    delivery_person_name = serializers.SerializerMethodField()
+    order_id = serializers.IntegerField(source='order.id', read_only=True)
+    
+    class Meta:
+        model = DeliveryAssignment
+        fields = [
+            'id', 'order', 'order_id', 'delivery_person', 'delivery_person_name',
+            'distance_km', 'estimated_time', 'status', 'assigned_at', 'responded_at'
+        ]
+        read_only_fields = ['assigned_at', 'responded_at']
+    
+    def get_delivery_person_name(self, obj):
+        return obj.delivery_person.get_full_name() or obj.delivery_person.username
+
+class NearestDeliveryPeopleResponseSerializer(serializers.Serializer):
+    """Serializer para respuesta de búsqueda de repartidores"""
+    order_id = serializers.IntegerField()
+    order_total = serializers.DecimalField(max_digits=10, decimal_places=2)
+    restaurant_name = serializers.CharField()
+    available_delivery_people = DeliveryPersonSerializer(many=True)
+    count = serializers.IntegerField()
+    message = serializers.CharField()

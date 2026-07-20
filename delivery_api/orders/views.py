@@ -357,3 +357,247 @@ class AdminOrderStatsView(APIView):
         }
         
         return Response(stats)
+    
+    # =============================================
+# VISTAS PARA ASIGNACIÓN DE REPARTIDORES
+# =============================================
+
+from geopy.distance import geodesic
+from django.db.models import Q
+from .models import DeliveryAssignment
+
+class FindNearestDeliveryPeopleView(APIView):
+    """
+    Buscar repartidores disponibles cercanos a un restaurante
+    """
+    permission_classes = [IsAuthenticated, IsRestaurantUser | IsAdminUser]
+    
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        restaurant_lat = request.data.get('restaurant_lat')
+        restaurant_lng = request.data.get('restaurant_lng')
+        radius_km = request.data.get('radius_km', 5)
+        limit = request.data.get('limit', 5)
+        
+        if not order_id:
+            return Response(
+                {'error': 'order_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not restaurant_lat or not restaurant_lng:
+            return Response(
+                {'error': 'Coordenadas del restaurante requeridas'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            order = Order.objects.get(id=order_id, status='ready')
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Pedido no disponible para asignación'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Buscar repartidores disponibles
+        available_deliveries = User.objects.filter(
+            user_type='delivery',
+            is_active=True,
+            is_available=True,
+            current_location_lat__isnull=False,
+            current_location_lng__isnull=False
+        ).exclude(
+            orders_as_delivery__status__in=['in_delivery']
+        )
+        
+        # Calcular distancias
+        delivery_people_data = []
+        for delivery in available_deliveries:
+            try:
+                distance = geodesic(
+                    (float(restaurant_lat), float(restaurant_lng)),
+                    (float(delivery.current_location_lat), float(delivery.current_location_lng))
+                ).kilometers
+            except (ValueError, TypeError):
+                continue
+            
+            if distance <= radius_km:
+                delivery_people_data.append({
+                    'id': delivery.id,
+                    'username': delivery.username,
+                    'full_name': delivery.get_full_name() or delivery.username,
+                    'phone': delivery.phone or '',
+                    'distance_km': round(distance, 2),
+                    'estimated_time': round(distance * 2, 0),  # 2 min por km
+                    'is_available': delivery.is_available,
+                    'current_location_lat': str(delivery.current_location_lat),
+                    'current_location_lng': str(delivery.current_location_lng),
+                })
+        
+        # Ordenar por distancia
+        delivery_people_data.sort(key=lambda x: x['distance_km'])
+        delivery_people_data = delivery_people_data[:limit]
+        
+        return Response({
+            'order': {
+                'id': order.id,
+                'total': str(order.total),
+                'restaurant_name': order.restaurant.restaurant_name or order.restaurant.username,
+                'restaurant_address': order.restaurant.restaurant_address or '',
+            },
+            'available_delivery_people': delivery_people_data,
+            'count': len(delivery_people_data),
+            'message': f'{len(delivery_people_data)} repartidores disponibles encontrados'
+        })
+
+class AssignDeliveryView(APIView):
+    """
+    Asignar un repartidor a un pedido manualmente
+    """
+    permission_classes = [IsAuthenticated, IsRestaurantUser | IsAdminUser]
+    
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        delivery_person_id = request.data.get('delivery_person_id')
+        
+        if not order_id or not delivery_person_id:
+            return Response(
+                {'error': 'order_id y delivery_person_id son requeridos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            order = Order.objects.get(id=order_id, status='ready')
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Pedido no disponible para asignación'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            delivery_person = User.objects.get(
+                id=delivery_person_id,
+                user_type='delivery',
+                is_active=True,
+                is_available=True
+            )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Repartidor no disponible'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verificar que no tenga pedidos activos
+        if Order.objects.filter(delivery_person=delivery_person, status='in_delivery').exists():
+            return Response(
+                {'error': 'El repartidor ya tiene un pedido en curso'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Asignar repartidor
+        order.delivery_person = delivery_person
+        order.update_status('in_delivery')
+        
+        return Response({
+            'message': f'Repartidor asignado exitosamente al pedido #{order.id}',
+            'order': {
+                'id': order.id,
+                'status': order.status,
+                'status_display': order.get_status_display(),
+                'delivery_person_name': delivery_person.get_full_name() or delivery_person.username,
+                'delivery_person_phone': delivery_person.phone or '',
+                'in_delivery_at': order.in_delivery_at,
+            }
+        })
+
+class AutoAssignDeliveryView(APIView):
+    """
+    Asignar automáticamente el repartidor más cercano
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        
+        if not order_id:
+            return Response(
+                {'error': 'order_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            order = Order.objects.get(id=order_id, status='ready', delivery_person__isnull=True)
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Pedido no disponible para asignación'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Obtener coordenadas del restaurante
+        restaurant_lat = float(request.data.get('restaurant_lat', 0))
+        restaurant_lng = float(request.data.get('restaurant_lng', 0))
+        
+        if not restaurant_lat or not restaurant_lng:
+            # Intentar obtener del restaurante
+            restaurant = order.restaurant
+            if restaurant.current_location_lat and restaurant.current_location_lng:
+                restaurant_lat = float(restaurant.current_location_lat)
+                restaurant_lng = float(restaurant.current_location_lng)
+            else:
+                return Response(
+                    {'error': 'Coordenadas del restaurante no disponibles'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Buscar repartidor más cercano
+        nearest_delivery = None
+        min_distance = float('inf')
+        
+        available_deliveries = User.objects.filter(
+            user_type='delivery',
+            is_active=True,
+            is_available=True,
+            current_location_lat__isnull=False,
+            current_location_lng__isnull=False
+        ).exclude(
+            orders_as_delivery__status__in=['in_delivery']
+        )
+        
+        for delivery in available_deliveries:
+            try:
+                distance = geodesic(
+                    (restaurant_lat, restaurant_lng),
+                    (float(delivery.current_location_lat), float(delivery.current_location_lng))
+                ).kilometers
+            except (ValueError, TypeError):
+                continue
+            
+            if distance < min_distance:
+                min_distance = distance
+                nearest_delivery = delivery
+        
+        if not nearest_delivery:
+            return Response(
+                {'error': 'No hay repartidores disponibles cercanos'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Asignar repartidor
+        order.delivery_person = nearest_delivery
+        order.update_status('in_delivery')
+        
+        return Response({
+            'message': f'Pedido #{order.id} asignado automáticamente',
+            'order': {
+                'id': order.id,
+                'status': order.status,
+                'status_display': order.get_status_display(),
+                'delivery_person_name': nearest_delivery.get_full_name() or nearest_delivery.username,
+                'delivery_person_phone': nearest_delivery.phone or '',
+                'in_delivery_at': order.in_delivery_at,
+            },
+            'assignment': {
+                'distance_km': round(min_distance, 2),
+                'estimated_time': round(min_distance * 2, 0),
+            }
+        })

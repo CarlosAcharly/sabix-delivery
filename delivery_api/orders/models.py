@@ -374,3 +374,77 @@ class DeliveryTracking(models.Model):
         self.location_history = history
         
         self.save()
+
+        # =============================================
+# ASIGNACIÓN DE REPARTIDORES
+# =============================================
+
+class DeliveryAssignment(models.Model):
+    """
+    Registro de asignaciones de repartidores
+    """
+    ASSIGNMENT_STATUS = (
+        ('pending', 'Pendiente'),
+        ('accepted', 'Aceptado'),
+        ('rejected', 'Rechazado'),
+        ('expired', 'Expirado'),
+    )
+    
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='assignment',
+        verbose_name=_('Pedido')
+    )
+    delivery_person = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='assignments',
+        limit_choices_to={'user_type': 'delivery'},
+        verbose_name=_('Repartidor')
+    )
+    distance_km = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name=_('Distancia en km')
+    )
+    estimated_time = models.IntegerField(
+        verbose_name=_('Tiempo estimado (minutos)')
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ASSIGNMENT_STATUS,
+        default='pending',
+        verbose_name=_('Estado')
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Asignado'))
+    responded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_('Respondido')
+    )
+    notes = models.TextField(blank=True, null=True, verbose_name=_('Notas'))
+    
+    class Meta:
+        db_table = 'delivery_assignments'
+        verbose_name = _('Asignación de repartidor')
+        verbose_name_plural = _('Asignaciones de repartidores')
+        ordering = ['-assigned_at']
+    
+    def __str__(self):
+        return f"Asignación #{self.id} - Pedido #{self.order.id} - {self.delivery_person.username}"
+    
+    def accept(self):
+        """Aceptar la asignación"""
+        self.status = 'accepted'
+        self.responded_at = models.functions.Now()
+        self.save()
+        # Asignar repartidor al pedido
+        self.order.delivery_person = self.delivery_person
+        self.order.update_status('in_delivery')
+    
+    def reject(self):
+        """Rechazar la asignación"""
+        self.status = 'rejected'
+        self.responded_at = models.functions.Now()
+        self.save()
