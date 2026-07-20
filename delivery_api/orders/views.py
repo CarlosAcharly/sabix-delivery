@@ -6,6 +6,11 @@ from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from datetime import timedelta
 from .models import Order, OrderItem, DeliveryTracking
+from django.contrib.auth import get_user_model
+from geopy.distance import geodesic
+from django.db.models import Q
+
+User = get_user_model()
 from .serializers import (
     OrderListSerializer, OrderDetailSerializer, OrderCreateSerializer,
     OrderUpdateStatusSerializer, OrderAssignDeliverySerializer,
