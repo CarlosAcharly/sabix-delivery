@@ -25,6 +25,7 @@ from .views import (
     FindNearestDeliveryPeopleView,
     AssignDeliveryView,
     AutoAssignDeliveryView,
+    AllAvailableDeliveryPeopleView,
 )
 
 urlpatterns = [
@@ -63,4 +64,8 @@ urlpatterns = [
     path('delivery/find-nearest/', FindNearestDeliveryPeopleView.as_view(), name='delivery-find-nearest'),
     path('delivery/assign/', AssignDeliveryView.as_view(), name='delivery-assign'),
     path('delivery/auto-assign/', AutoAssignDeliveryView.as_view(), name='delivery-auto-assign'),
+    # =============================================
+    # NUEVO ENDPOINT - TODOS LOS REPARTIDORES
+    # =============================================
+    path('delivery/all-available/', AllAvailableDeliveryPeopleView.as_view(), name='delivery-all-available'),
 ]

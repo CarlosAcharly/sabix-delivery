@@ -606,3 +606,72 @@ class AutoAssignDeliveryView(APIView):
                 'estimated_time': round(min_distance * 2, 0),
             }
         })
+
+# =============================================
+# VISTA PARA OBTENER TODOS LOS REPARTIDORES DISPONIBLES
+# =============================================
+
+class AllAvailableDeliveryPeopleView(APIView):
+    """
+    Obtener todos los repartidores disponibles (sin restricción de ubicación)
+    Para asignación manual sin importar la ubicación
+    """
+    permission_classes = [IsAuthenticated, IsRestaurantUser | IsAdminUser]
+    
+    def get(self, request):
+        try:
+            # Buscar todos los repartidores disponibles
+            available_deliveries = User.objects.filter(
+                user_type='delivery',
+                is_active=True,
+                is_available=True
+            ).exclude(
+                # Excluir repartidores que tienen pedidos en curso
+                orders_as_delivery__status__in=['in_delivery']
+            ).distinct()
+            
+            # Serializar manualmente para incluir información adicional
+            results = []
+            for delivery in available_deliveries:
+                # Calcular entregas completadas
+                completed_deliveries = delivery.orders_as_delivery.filter(
+                    status='delivered'
+                ).count()
+                
+                # Calcular calificación promedio
+                avg_rating = delivery.orders_as_delivery.filter(
+                    status='delivered',
+                    client_rating__isnull=False
+                ).aggregate(
+                    avg=models.Avg('client_rating')
+                )['avg']
+                
+                results.append({
+                    'id': delivery.id,
+                    'username': delivery.username,
+                    'full_name': delivery.get_full_name() or delivery.username,
+                    'phone': delivery.phone or '',
+                    'is_available': delivery.is_available,
+                    'current_location_lat': str(delivery.current_location_lat) if delivery.current_location_lat else None,
+                    'current_location_lng': str(delivery.current_location_lng) if delivery.current_location_lng else None,
+                    'rating': round(avg_rating, 1) if avg_rating else None,
+                    'completed_deliveries': completed_deliveries,
+                    # No tenemos distancia porque no estamos calculando ubicación
+                    'distance_km': None,
+                    'estimated_time': None,
+                })
+            
+            return Response({
+                'count': len(results),
+                'results': results,
+                'message': f'{len(results)} repartidores disponibles encontrados'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            print(f"Error en AllAvailableDeliveryPeopleView: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': 'Error al obtener repartidores disponibles'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
