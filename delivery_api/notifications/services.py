@@ -15,8 +15,25 @@ class NotificationService:
         """
         channel_layer = get_channel_layer()
         
+        # Enviar al grupo general
         async_to_sync(channel_layer.group_send)(
             f'notifications_{user_id}',
+            {
+                'type': 'notification_message',
+                'data': notification_data
+            }
+        )
+    
+    @staticmethod
+    def send_to_role(user_id, role, notification_data):
+        """
+        Enviar notificación a un grupo específico por rol
+        """
+        channel_layer = get_channel_layer()
+        role_group = f'{role}_{user_id}'
+        
+        async_to_sync(channel_layer.group_send)(
+            role_group,
             {
                 'type': 'notification_message',
                 'data': notification_data
@@ -58,18 +75,23 @@ def send_notification_on_create(sender, instance, created, **kwargs):
     if created:
         from notifications.services import NotificationService
         
-        # Enviar via WebSocket
-        NotificationService.send_to_user(
-            instance.user.id,
-            {
-                'id': instance.id,
-                'title': instance.title,
-                'message': instance.message,
-                'type': instance.type,
-                'created_at': instance.created_at.isoformat(),
-                'data': instance.data
-            }
-        )
+        notification_data = {
+            'id': instance.id,
+            'title': instance.title,
+            'message': instance.message,
+            'type': instance.type,
+            'created_at': instance.created_at.isoformat(),
+            'data': instance.data,
+            'is_read': instance.is_read,
+            'priority': instance.priority,
+        }
+        
+        # Enviar via WebSocket al grupo general
+        NotificationService.send_to_user(instance.user.id, notification_data)
+        
+        # Enviar al grupo específico del rol
+        role = instance.user.user_type
+        NotificationService.send_to_role(instance.user.id, role, notification_data)
         
         # Actualizar contador de no leídas
         NotificationService.update_unread_count(instance.user.id)

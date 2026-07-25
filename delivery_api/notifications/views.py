@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Count
 from django.utils import timezone
 from datetime import timedelta
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from .models import Notification, NotificationPreference, DeviceToken
 from .serializers import (
     NotificationSerializer, NotificationCreateSerializer,
@@ -189,6 +191,7 @@ class AdminBroadcastNotificationView(APIView):
         notification_type = request.data.get('type', 'system')
         data = request.data.get('data', {})
         user_filter = request.data.get('user_filter', 'all')
+        priority = request.data.get('priority', 0)
         
         if not title or not message:
             return Response(
@@ -237,29 +240,84 @@ class AdminBroadcastNotificationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Crear notificaciones
-        notifications = []
+        # =============================================
+        # CREAR NOTIFICACIONES Y ENVIAR WEBSOCKET
+        # =============================================
+        channel_layer = get_channel_layer()
+        notifications_created = []
+        
         for user in users:
-            notification = Notification(
+            # Crear notificación en base de datos
+            notification = Notification.objects.create(
                 user=user,
                 type=notification_type,
                 title=title,
                 message=message,
                 data=data,
-                priority=0
+                priority=priority
             )
-            notifications.append(notification)
-        
-        Notification.objects.bulk_create(notifications)
-        
-        # Enviar notificaciones en tiempo real (WebSockets)
-        # Aquí iría la lógica para enviar push notifications
+            notifications_created.append(notification)
+            
+            # =============================================
+            # ENVIAR WEBSOCKET AL GRUPO GENERAL
+            # =============================================
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f'notifications_{user.id}',
+                    {
+                        'type': 'notification_message',
+                        'data': {
+                            'id': notification.id,
+                            'title': notification.title,
+                            'message': notification.message,
+                            'type': notification.type,
+                            'created_at': notification.created_at.isoformat(),
+                            'data': notification.data,
+                            'is_read': notification.is_read,
+                            'priority': notification.priority,
+                        }
+                    }
+                )
+            except Exception as e:
+                print(f"Error enviando WebSocket al usuario {user.id}: {e}")
+            
+            # =============================================
+            # ENVIAR WEBSOCKET AL GRUPO ESPECÍFICO DEL ROL
+            # =============================================
+            role_group_map = {
+                'restaurant': f'restaurant_{user.id}',
+                'delivery': f'delivery_{user.id}',
+                'client': f'client_{user.id}',
+                'admin': f'admin_{user.id}',
+            }
+            
+            role_group = role_group_map.get(user.user_type)
+            if role_group:
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        role_group,
+                        {
+                            'type': 'notification_message',
+                            'data': {
+                                'id': notification.id,
+                                'title': notification.title,
+                                'message': notification.message,
+                                'type': notification.type,
+                                'created_at': notification.created_at.isoformat(),
+                                'data': notification.data,
+                                'is_read': notification.is_read,
+                                'priority': notification.priority,
+                            }
+                        }
+                    )
+                except Exception as e:
+                    print(f"Error enviando WebSocket al grupo {role_group}: {e}")
         
         return Response({
             'message': f'Notificación enviada a {users.count()} {filter_description}',
             'count': users.count(),
             'filter': user_filter,
-            'users': [user.username for user in users[:5]]  # Mostrar primeros 5 usuarios
+            'users': [user.username for user in users[:5]]
         }, status=status.HTTP_201_CREATED)
 
 class AdminNotificationStatsView(APIView):
