@@ -2,8 +2,9 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils import timezone
+from datetime import timedelta
 from .models import Notification, NotificationPreference, DeviceToken
 from .serializers import (
     NotificationSerializer, NotificationCreateSerializer,
@@ -175,7 +176,7 @@ class AdminNotificationCreateView(generics.CreateAPIView):
 
 class AdminBroadcastNotificationView(APIView):
     """
-    Enviar notificación masiva a todos los usuarios (solo admin)
+    Enviar notificación masiva a usuarios filtrados por tipo (solo admin)
     """
     permission_classes = [IsAuthenticated, IsAdminUser]
     
@@ -187,6 +188,7 @@ class AdminBroadcastNotificationView(APIView):
         message = request.data.get('message')
         notification_type = request.data.get('type', 'system')
         data = request.data.get('data', {})
+        user_filter = request.data.get('user_filter', 'all')
         
         if not title or not message:
             return Response(
@@ -194,10 +196,49 @@ class AdminBroadcastNotificationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Crear notificaciones para todos los usuarios
-        users = User.objects.filter(is_active=True)
-        notifications = []
+        # =============================================
+        # FILTRAR USUARIOS POR TIPO
+        # =============================================
+        if user_filter == 'all':
+            users = User.objects.filter(is_active=True)
+            filter_description = 'todos los usuarios'
+        elif user_filter == 'clients':
+            users = User.objects.filter(is_active=True, user_type='client')
+            filter_description = 'clientes'
+        elif user_filter == 'deliveries':
+            users = User.objects.filter(is_active=True, user_type='delivery')
+            filter_description = 'repartidores'
+        elif user_filter == 'restaurants':
+            users = User.objects.filter(is_active=True, user_type='restaurant')
+            filter_description = 'restaurantes'
+        elif user_filter == 'admins':
+            users = User.objects.filter(is_active=True, user_type='admin')
+            filter_description = 'administradores'
+        elif user_filter.startswith('user_'):
+            # Enviar a un usuario específico
+            try:
+                user_id = int(user_filter.split('_')[1])
+                users = User.objects.filter(id=user_id, is_active=True)
+                filter_description = f'usuario {users.first().username if users.exists() else "no encontrado"}'
+            except (ValueError, IndexError):
+                return Response(
+                    {'error': 'Formato de user_filter inválido. Use: user_<id>'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            return Response(
+                {'error': f'Filtro inválido: {user_filter}. Opciones: all, clients, deliveries, restaurants, admins, user_<id>'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
+        if not users.exists():
+            return Response(
+                {'error': f'No hay usuarios activos en la categoría: {filter_description}'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Crear notificaciones
+        notifications = []
         for user in users:
             notification = Notification(
                 user=user,
@@ -209,15 +250,16 @@ class AdminBroadcastNotificationView(APIView):
             )
             notifications.append(notification)
         
-        # Crear en lote
         Notification.objects.bulk_create(notifications)
         
         # Enviar notificaciones en tiempo real (WebSockets)
         # Aquí iría la lógica para enviar push notifications
         
         return Response({
-            'message': f'Notificación enviada a {users.count()} usuarios',
-            'count': users.count()
+            'message': f'Notificación enviada a {users.count()} {filter_description}',
+            'count': users.count(),
+            'filter': user_filter,
+            'users': [user.username for user in users[:5]]  # Mostrar primeros 5 usuarios
         }, status=status.HTTP_201_CREATED)
 
 class AdminNotificationStatsView(APIView):
