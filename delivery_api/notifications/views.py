@@ -244,7 +244,6 @@ class AdminBroadcastNotificationView(APIView):
         # CREAR NOTIFICACIONES Y ENVIAR WEBSOCKET
         # =============================================
         channel_layer = get_channel_layer()
-        notifications_created = []
         
         for user in users:
             # Crear notificación en base de datos
@@ -256,7 +255,6 @@ class AdminBroadcastNotificationView(APIView):
                 data=data,
                 priority=priority
             )
-            notifications_created.append(notification)
             
             # =============================================
             # ENVIAR WEBSOCKET AL GRUPO GENERAL
@@ -361,3 +359,82 @@ class AdminNotificationStatsView(APIView):
         }
         
         return Response(stats)
+
+
+# =============================================
+# ENDPOINT DE PRUEBA - NOTIFICACIONES A RESTAURANTES
+# =============================================
+
+class TestRestaurantNotificationView(APIView):
+    """
+    Endpoint de prueba para enviar notificaciones a restaurantes
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def post(self, request):
+        from django.contrib.auth import get_user_model
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        User = get_user_model()
+        
+        title = request.data.get('title', 'Notificación de prueba')
+        message = request.data.get('message', 'Esta es una notificación de prueba para restaurantes')
+        
+        restaurants = User.objects.filter(user_type='restaurant', is_active=True)
+        channel_layer = get_channel_layer()
+        
+        if not restaurants.exists():
+            return Response(
+                {'error': 'No hay restaurantes activos'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        for restaurant in restaurants:
+            notification = Notification.objects.create(
+                user=restaurant,
+                type='system',
+                title=title,
+                message=message,
+                data={'test': True},
+                priority=0
+            )
+            
+            # Enviar al grupo general
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{restaurant.id}',
+                {
+                    'type': 'notification_message',
+                    'data': {
+                        'id': notification.id,
+                        'title': notification.title,
+                        'message': notification.message,
+                        'type': notification.type,
+                        'created_at': notification.created_at.isoformat(),
+                        'data': notification.data,
+                        'is_read': notification.is_read,
+                    }
+                }
+            )
+            
+            # Enviar al grupo específico de restaurante
+            async_to_sync(channel_layer.group_send)(
+                f'restaurant_{restaurant.id}',
+                {
+                    'type': 'notification_message',
+                    'data': {
+                        'id': notification.id,
+                        'title': notification.title,
+                        'message': notification.message,
+                        'type': notification.type,
+                        'created_at': notification.created_at.isoformat(),
+                        'data': notification.data,
+                        'is_read': notification.is_read,
+                    }
+                }
+            )
+        
+        return Response({
+            'message': f'Notificación enviada a {restaurants.count()} restaurantes',
+            'count': restaurants.count(),
+            'restaurants': [r.username for r in restaurants]
+        })
