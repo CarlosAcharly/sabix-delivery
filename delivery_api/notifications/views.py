@@ -14,6 +14,9 @@ from .serializers import (
     UnreadCountSerializer
 )
 from users.permissions import IsAdminUser
+import logging
+
+logger = logging.getLogger(__name__)
 
 # =============================================
 # NOTIFICACIONES DEL USUARIO
@@ -43,6 +46,7 @@ class NotificationListView(generics.ListAPIView):
         
         return queryset.order_by('-priority', '-created_at')
 
+
 class UnreadNotificationsView(generics.ListAPIView):
     """
     Listar notificaciones no leídas del usuario
@@ -57,6 +61,7 @@ class UnreadNotificationsView(generics.ListAPIView):
             is_archived=False
         ).order_by('-priority', '-created_at')
 
+
 class NotificationDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Ver, actualizar o eliminar una notificación específica
@@ -66,6 +71,7 @@ class NotificationDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user)
+
 
 class MarkNotificationReadView(APIView):
     """
@@ -84,10 +90,19 @@ class MarkNotificationReadView(APIView):
         
         notification.mark_as_read()
         
+        # Actualizar contador de no leídas vía WebSocket
+        from .services import NotificationService
+        NotificationService.update_unread_count(request.user.id)
+        
         return Response({
             'message': 'Notificación marcada como leída',
-            'notification': NotificationSerializer(notification).data
+            'notification': NotificationSerializer(notification).data,
+            'unread_count': Notification.objects.filter(
+                user=request.user,
+                is_read=False
+            ).count()
         })
+
 
 class MarkAllNotificationsReadView(APIView):
     """
@@ -105,10 +120,15 @@ class MarkAllNotificationsReadView(APIView):
         for notification in notifications:
             notification.mark_as_read()
         
+        # Actualizar contador de no leídas vía WebSocket
+        from .services import NotificationService
+        NotificationService.update_unread_count(request.user.id)
+        
         return Response({
             'message': f'{count} notificaciones marcadas como leídas',
             'count': count
         })
+
 
 class UnreadCountView(APIView):
     """
@@ -124,6 +144,7 @@ class UnreadCountView(APIView):
         ).count()
         
         return Response({'count': count})
+
 
 # =============================================
 # PREFERENCIAS DE NOTIFICACIONES
@@ -142,6 +163,7 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
         )
         return preference
 
+
 # =============================================
 # TOKENS DE DISPOSITIVOS (PUSH NOTIFICATIONS)
 # =============================================
@@ -156,6 +178,7 @@ class DeviceTokenListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return DeviceToken.objects.filter(user=self.request.user, is_active=True)
 
+
 class DeviceTokenDeleteView(generics.DestroyAPIView):
     """
     Eliminar un token de dispositivo
@@ -164,6 +187,7 @@ class DeviceTokenDeleteView(generics.DestroyAPIView):
     
     def get_queryset(self):
         return DeviceToken.objects.filter(user=self.request.user)
+
 
 # =============================================
 # ADMINISTRACIÓN (SOLO ADMIN)
@@ -175,6 +199,36 @@ class AdminNotificationCreateView(generics.CreateAPIView):
     """
     serializer_class = NotificationCreateSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def perform_create(self, serializer):
+        notification = serializer.save()
+        
+        # Enviar notificación en tiempo real al usuario específico
+        from .services import NotificationService
+        
+        notification_data = {
+            'id': notification.id,
+            'title': notification.title,
+            'message': notification.message,
+            'type': notification.type,
+            'created_at': notification.created_at.isoformat(),
+            'data': notification.data,
+            'is_read': notification.is_read,
+            'priority': notification.priority,
+        }
+        
+        # Enviar al grupo general del usuario
+        NotificationService.send_to_user(notification.user.id, notification_data)
+        
+        # Enviar al grupo específico del rol
+        role = notification.user.user_type
+        NotificationService.send_to_role(notification.user.id, role, notification_data)
+        
+        # Actualizar contador de no leídas
+        NotificationService.update_unread_count(notification.user.id)
+        
+        logger.info(f"📨 Notificación individual enviada al usuario {notification.user.id} (tipo: {role})")
+
 
 class AdminBroadcastNotificationView(APIView):
     """
@@ -202,23 +256,18 @@ class AdminBroadcastNotificationView(APIView):
         # =============================================
         # FILTRAR USUARIOS POR TIPO
         # =============================================
-        if user_filter == 'all':
-            users = User.objects.filter(is_active=True)
-            filter_description = 'todos los usuarios'
-        elif user_filter == 'clients':
-            users = User.objects.filter(is_active=True, user_type='client')
-            filter_description = 'clientes'
-        elif user_filter == 'deliveries':
-            users = User.objects.filter(is_active=True, user_type='delivery')
-            filter_description = 'repartidores'
-        elif user_filter == 'restaurants':
-            users = User.objects.filter(is_active=True, user_type='restaurant')
-            filter_description = 'restaurantes'
-        elif user_filter == 'admins':
-            users = User.objects.filter(is_active=True, user_type='admin')
-            filter_description = 'administradores'
+        filter_map = {
+            'all': ('todos los usuarios', Q(is_active=True)),
+            'clients': ('clientes', Q(is_active=True, user_type='client')),
+            'deliveries': ('repartidores', Q(is_active=True, user_type='delivery')),
+            'restaurants': ('restaurantes', Q(is_active=True, user_type='restaurant')),
+            'admins': ('administradores', Q(is_active=True, user_type='admin')),
+        }
+        
+        if user_filter in filter_map:
+            filter_description, filter_condition = filter_map[user_filter]
+            users = User.objects.filter(filter_condition)
         elif user_filter.startswith('user_'):
-            # Enviar a un usuario específico
             try:
                 user_id = int(user_filter.split('_')[1])
                 users = User.objects.filter(id=user_id, is_active=True)
@@ -244,79 +293,103 @@ class AdminBroadcastNotificationView(APIView):
         # CREAR NOTIFICACIONES Y ENVIAR WEBSOCKET
         # =============================================
         channel_layer = get_channel_layer()
+        sent_count = 0
+        errors = []
         
         for user in users:
-            # Crear notificación en base de datos
-            notification = Notification.objects.create(
-                user=user,
-                type=notification_type,
-                title=title,
-                message=message,
-                data=data,
-                priority=priority
-            )
-            
-            # =============================================
-            # ENVIAR WEBSOCKET AL GRUPO GENERAL
-            # =============================================
             try:
-                async_to_sync(channel_layer.group_send)(
-                    f'notifications_{user.id}',
-                    {
-                        'type': 'notification_message',
-                        'data': {
-                            'id': notification.id,
-                            'title': notification.title,
-                            'message': notification.message,
-                            'type': notification.type,
-                            'created_at': notification.created_at.isoformat(),
-                            'data': notification.data,
-                            'is_read': notification.is_read,
-                            'priority': notification.priority,
-                        }
-                    }
+                # Crear notificación en base de datos
+                notification = Notification.objects.create(
+                    user=user,
+                    type=notification_type,
+                    title=title,
+                    message=message,
+                    data=data,
+                    priority=priority
                 )
-            except Exception as e:
-                print(f"Error enviando WebSocket al usuario {user.id}: {e}")
-            
-            # =============================================
-            # ENVIAR WEBSOCKET AL GRUPO ESPECÍFICO DEL ROL
-            # =============================================
-            role_group_map = {
-                'restaurant': f'restaurant_{user.id}',
-                'delivery': f'delivery_{user.id}',
-                'client': f'client_{user.id}',
-                'admin': f'admin_{user.id}',
-            }
-            
-            role_group = role_group_map.get(user.user_type)
-            if role_group:
+                
+                # Datos de la notificación para WebSocket
+                notification_data = {
+                    'id': notification.id,
+                    'title': notification.title,
+                    'message': notification.message,
+                    'type': notification.type,
+                    'created_at': notification.created_at.isoformat(),
+                    'data': notification.data,
+                    'is_read': notification.is_read,
+                    'priority': notification.priority,
+                }
+                
+                # =============================================
+                # ENVIAR WEBSOCKET AL GRUPO GENERAL
+                # =============================================
                 try:
                     async_to_sync(channel_layer.group_send)(
-                        role_group,
+                        f'notifications_{user.id}',
                         {
                             'type': 'notification_message',
-                            'data': {
-                                'id': notification.id,
-                                'title': notification.title,
-                                'message': notification.message,
-                                'type': notification.type,
-                                'created_at': notification.created_at.isoformat(),
-                                'data': notification.data,
-                                'is_read': notification.is_read,
-                                'priority': notification.priority,
-                            }
+                            'data': notification_data
                         }
                     )
+                    logger.debug(f"✅ Notificación enviada al grupo general del usuario {user.id}")
                 except Exception as e:
-                    print(f"Error enviando WebSocket al grupo {role_group}: {e}")
+                    error_msg = f"Error enviando WebSocket al usuario {user.id}: {e}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+                
+                # =============================================
+                # ENVIAR WEBSOCKET AL GRUPO ESPECÍFICO DEL ROL
+                # =============================================
+                role_group_map = {
+                    'restaurant': f'restaurant_{user.id}',
+                    'delivery': f'delivery_{user.id}',
+                    'client': f'client_{user.id}',
+                    'admin': f'admin_{user.id}',
+                }
+                
+                role_group = role_group_map.get(user.user_type)
+                if role_group:
+                    try:
+                        async_to_sync(channel_layer.group_send)(
+                            role_group,
+                            {
+                                'type': 'notification_message',
+                                'data': notification_data
+                            }
+                        )
+                        logger.debug(f"✅ Notificación enviada al grupo de rol {role_group}")
+                    except Exception as e:
+                        error_msg = f"Error enviando WebSocket al grupo {role_group}: {e}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                
+                # Actualizar contador de no leídas
+                try:
+                    from .services import NotificationService
+                    NotificationService.update_unread_count(user.id)
+                except Exception as e:
+                    logger.error(f"Error actualizando contador para usuario {user.id}: {e}")
+                
+                sent_count += 1
+                
+            except Exception as e:
+                error_msg = f"Error procesando notificación para usuario {user.id}: {e}"
+                logger.error(error_msg)
+                errors.append(error_msg)
         
-        return Response({
-            'message': f'Notificación enviada a {users.count()} {filter_description}',
-            'count': users.count(),
+        response_data = {
+            'message': f'Notificación enviada a {sent_count} {filter_description}',
+            'count': sent_count,
             'filter': user_filter,
-            'users': [user.username for user in users[:5]]
-        }, status=status.HTTP_201_CREATED)
+            'users': [user.username for user in users[:5]],
+            'errors': errors if errors else None,
+        }
+        
+        if errors:
+            response_data['warning'] = f'Se encontraron {len(errors)} errores durante el envío'
+            
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
 
 class AdminNotificationStatsView(APIView):
     """
@@ -389,52 +462,58 @@ class TestRestaurantNotificationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        sent_count = 0
         for restaurant in restaurants:
-            notification = Notification.objects.create(
-                user=restaurant,
-                type='system',
-                title=title,
-                message=message,
-                data={'test': True},
-                priority=0
-            )
-            
-            # Enviar al grupo general
-            async_to_sync(channel_layer.group_send)(
-                f'notifications_{restaurant.id}',
-                {
-                    'type': 'notification_message',
-                    'data': {
-                        'id': notification.id,
-                        'title': notification.title,
-                        'message': notification.message,
-                        'type': notification.type,
-                        'created_at': notification.created_at.isoformat(),
-                        'data': notification.data,
-                        'is_read': notification.is_read,
-                    }
+            try:
+                notification = Notification.objects.create(
+                    user=restaurant,
+                    type='system',
+                    title=title,
+                    message=message,
+                    data={'test': True, 'timestamp': timezone.now().isoformat()},
+                    priority=0
+                )
+                
+                notification_data = {
+                    'id': notification.id,
+                    'title': notification.title,
+                    'message': notification.message,
+                    'type': notification.type,
+                    'created_at': notification.created_at.isoformat(),
+                    'data': notification.data,
+                    'is_read': notification.is_read,
                 }
-            )
-            
-            # Enviar al grupo específico de restaurante
-            async_to_sync(channel_layer.group_send)(
-                f'restaurant_{restaurant.id}',
-                {
-                    'type': 'notification_message',
-                    'data': {
-                        'id': notification.id,
-                        'title': notification.title,
-                        'message': notification.message,
-                        'type': notification.type,
-                        'created_at': notification.created_at.isoformat(),
-                        'data': notification.data,
-                        'is_read': notification.is_read,
+                
+                # Enviar al grupo general
+                async_to_sync(channel_layer.group_send)(
+                    f'notifications_{restaurant.id}',
+                    {
+                        'type': 'notification_message',
+                        'data': notification_data
                     }
-                }
-            )
+                )
+                
+                # Enviar al grupo específico de restaurante
+                async_to_sync(channel_layer.group_send)(
+                    f'restaurant_{restaurant.id}',
+                    {
+                        'type': 'notification_message',
+                        'data': notification_data
+                    }
+                )
+                
+                # Actualizar contador
+                from .services import NotificationService
+                NotificationService.update_unread_count(restaurant.id)
+                
+                sent_count += 1
+                logger.info(f"✅ Notificación de prueba enviada al restaurante {restaurant.id}")
+                
+            except Exception as e:
+                logger.error(f"❌ Error enviando notificación al restaurante {restaurant.id}: {e}")
         
         return Response({
-            'message': f'Notificación enviada a {restaurants.count()} restaurantes',
-            'count': restaurants.count(),
-            'restaurants': [r.username for r in restaurants]
+            'message': f'Notificación enviada a {sent_count} restaurantes',
+            'count': sent_count,
+            'restaurants': [r.username for r in restaurants[:10]]
         })
