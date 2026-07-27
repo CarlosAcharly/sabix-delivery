@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Cargar variables de entorno desde .env
 load_dotenv()
 
-BASE_DIR = Path(__file__).resolve().parent.parent  # ✅ Esto apunta a la carpeta padre
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-your-secret-key-here')
@@ -31,7 +31,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt',
 
-    # Local apps - Importante: sin prefijo porque están al mismo nivel
+    # Local apps
     'users',   
     'common',   
     'django_filters',  
@@ -39,7 +39,6 @@ INSTALLED_APPS = [
     'orders',
     'notifications',
     'channels',
-
 ]
 
 CHANNEL_LAYERS = {
@@ -52,8 +51,8 @@ CHANNEL_LAYERS = {
 }
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # ✅ Debe ir primero
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -62,7 +61,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'delivery_api.urls'  # ✅ Así debe ser
+ROOT_URLCONF = 'delivery_api.urls'
 
 TEMPLATES = [
     {
@@ -127,11 +126,52 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173').split(',')
+# =============================================
+# CORS Configuration - CORREGIDA PARA WEBSOCKETS
+# =============================================
 
+# ✅ Permitir todos los orígenes para pruebas (luego limitar en producción)
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# Headers adicionales para CORS (incluyendo WebSockets)
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-app-type',
+    'upgrade',         # ✅ Para WebSockets
+    'connection',      # ✅ Para WebSockets
+    'sec-websocket-key',   # ✅ Para WebSockets
+    'sec-websocket-version', # ✅ Para WebSockets
+]
+
+CORS_EXPOSE_HEADERS = [
+    'content-disposition',
+    'content-length',
+    'content-type',
+]
+
+# Métodos permitidos
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# =============================================
 # Django REST Framework Configuration
+# =============================================
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -169,7 +209,7 @@ SIMPLE_JWT = {
 }
 
 # Custom User Model
-AUTH_USER_MODEL = 'users.User'  # ✅ Así debe ser
+AUTH_USER_MODEL = 'users.User'
 
 # Security settings for production
 if not DEBUG:
