@@ -11,9 +11,10 @@ from .models import Notification, NotificationPreference, DeviceToken
 from .serializers import (
     NotificationSerializer, NotificationCreateSerializer,
     NotificationPreferenceSerializer, DeviceTokenSerializer,
-    UnreadCountSerializer
+    UnreadCountSerializer, FCMDeviceTokenSerializer
 )
 from users.permissions import IsAdminUser
+from .push_service import PushNotificationService  
 import logging
 
 logger = logging.getLogger(__name__)
@@ -517,3 +518,86 @@ class TestRestaurantNotificationView(APIView):
             'count': sent_count,
             'restaurants': [r.username for r in restaurants[:10]]
         })
+
+# =============================================
+# PUSH NOTIFICATIONS - FIREBASE TOKENS
+# =============================================
+
+from .models import FCMDeviceToken
+from .serializers import FCMDeviceTokenSerializer
+from .push_service import PushNotificationService
+
+class FCMDeviceTokenView(APIView):
+    """
+    Registrar o actualizar un token de dispositivo FCM
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        token = request.data.get('token')
+        device_type = request.data.get('device_type', 'android')
+        device_name = request.data.get('device_name', '')
+        
+        if not token:
+            return Response(
+                {'error': 'Token es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        result = PushNotificationService.register_device(
+            user_id=request.user.id,
+            token=token,
+            device_type=device_type,
+            device_name=device_name
+        )
+        
+        if result['success']:
+            return Response(result, status=status.HTTP_201_CREATED)
+        return Response(result, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request):
+        token = request.data.get('token')
+        
+        if not token:
+            return Response(
+                {'error': 'Token es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        result = PushNotificationService.unregister_device(
+            user_id=request.user.id,
+            token=token
+        )
+        
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
+        return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+class FCMDeviceTokenListDeleteView(APIView):
+    """
+    Listar o eliminar tokens de dispositivos
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        devices = FCMDeviceToken.objects.filter(
+            user=request.user,
+            is_active=True
+        )
+        serializer = FCMDeviceTokenSerializer(devices, many=True)
+        return Response(serializer.data)
+    
+    def delete(self, request, token_id):
+        try:
+            device = FCMDeviceToken.objects.get(id=token_id, user=request.user)
+            device.is_active = False
+            device.save()
+            return Response(
+                {'message': 'Dispositivo eliminado'},
+                status=status.HTTP_200_OK
+            )
+        except FCMDeviceToken.DoesNotExist:
+            return Response(
+                {'error': 'Dispositivo no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )

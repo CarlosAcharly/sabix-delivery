@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Notification, NotificationPreference, DeviceToken
+from .models import Notification, NotificationPreference, DeviceToken, FCMDeviceToken
 
 class NotificationSerializer(serializers.ModelSerializer):
     """Serializer para notificaciones"""
@@ -72,3 +72,22 @@ class DeviceTokenSerializer(serializers.ModelSerializer):
 class UnreadCountSerializer(serializers.Serializer):
     """Serializer para contar notificaciones no leídas"""
     count = serializers.IntegerField()
+
+# =============================================
+# SERIALIZERS PARA TOKENS FCM
+# =============================================
+
+class FCMDeviceTokenSerializer(serializers.ModelSerializer):
+    """Serializer para tokens de dispositivos FCM"""
+    user_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = FCMDeviceToken
+        fields = [
+            'id', 'user', 'user_name', 'token', 'device_type',
+            'device_name', 'is_active', 'last_used', 'created_at'
+        ]
+        read_only_fields = ['user', 'last_used', 'created_at']
+    
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username

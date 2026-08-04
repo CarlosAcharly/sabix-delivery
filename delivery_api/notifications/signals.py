@@ -3,6 +3,8 @@ from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from orders.models import Order, OrderItem
 from .models import Notification
+from .push_service import PushNotificationService  # ✅ Agregar esta importación
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -201,3 +203,30 @@ def create_order_notification(sender, instance, created, **kwargs):
                     
     except Exception as e:
         logger.error(f"❌ Error creando notificaciones para pedido #{instance.id}: {e}")
+
+# =============================================
+# INTEGRACIÓN CON PUSH NOTIFICATIONS
+# =============================================
+
+from .push_service import PushNotificationService
+
+@receiver(post_save, sender=Order)
+def create_order_notification(sender, instance, created, **kwargs):
+    """
+    Crea notificaciones automáticas cuando cambia el estado de un pedido
+    """
+    # ... código existente ...
+    
+    # Agregar push notifications después de crear notificaciones en BD
+    if created:
+        # Notificar push al restaurante
+        PushNotificationService.send_push_notification(
+            user_id=instance.restaurant.id,
+            title='¡Nuevo pedido! 📦',
+            body=f'Cliente {instance.client.get_full_name()} realizó un pedido de ${instance.total}',
+            data={
+                'type': 'order_new',
+                'order_id': instance.id,
+                'screen': 'restaurant_orders',
+            }
+        )

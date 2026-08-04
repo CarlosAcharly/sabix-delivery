@@ -80,6 +80,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'delivery_api.wsgi.application'
+ASGI_APPLICATION = 'delivery_api.asgi.application'
 
 # Database - PostgreSQL
 DATABASES = {
@@ -146,10 +147,10 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
     'x-app-type',
-    'upgrade',         # ✅ Para WebSockets
-    'connection',      # ✅ Para WebSockets
-    'sec-websocket-key',   # ✅ Para WebSockets
-    'sec-websocket-version', # ✅ Para WebSockets
+    'upgrade',         
+    'connection',      
+    'sec-websocket-key',
+    'sec-websocket-version',
 ]
 
 CORS_EXPOSE_HEADERS = [
@@ -219,3 +220,30 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+# =============================================
+# FIREBASE CONFIGURATION
+# =============================================
+
+# Configuración de Firebase
+FIREBASE_CREDENTIALS_FILE = os.path.join(
+    BASE_DIR, 
+    'firebase', 
+    'sabixdelivery-firebase-adminsdk-fbsvc-3572815d44.json'
+)
+
+# Intentar inicializar Firebase
+try:
+    import firebase_admin
+    from firebase_admin import credentials
+    
+    if os.path.exists(FIREBASE_CREDENTIALS_FILE):
+        cred = credentials.Certificate(FIREBASE_CREDENTIALS_FILE)
+        firebase_app = firebase_admin.initialize_app(cred)
+        print("✅ Firebase inicializado correctamente")
+    else:
+        print(f"⚠️ Archivo de credenciales Firebase no encontrado")
+        print(f"📌 Ruta esperada: {FIREBASE_CREDENTIALS_FILE}")
+except Exception as e:
+    print(f"❌ Error inicializando Firebase: {e}")

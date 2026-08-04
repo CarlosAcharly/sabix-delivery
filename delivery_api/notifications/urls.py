@@ -1,4 +1,6 @@
 from django.urls import path
+from .views import FCMDeviceTokenView, FCMDeviceTokenListDeleteView
+
 from .views import (
     NotificationListView,
     UnreadNotificationsView,
@@ -12,7 +14,7 @@ from .views import (
     AdminNotificationCreateView,
     AdminBroadcastNotificationView,
     AdminNotificationStatsView,
-    TestRestaurantNotificationView,  # ✅ Importado desde views
+    TestRestaurantNotificationView,
 )
 
 urlpatterns = [
@@ -44,4 +46,11 @@ urlpatterns = [
     path('admin/broadcast/', AdminBroadcastNotificationView.as_view(), name='admin-notification-broadcast'),
     path('admin/stats/', AdminNotificationStatsView.as_view(), name='admin-notification-stats'),
     path('admin/test-restaurant/', TestRestaurantNotificationView.as_view(), name='test-restaurant-notification'),
+
+    # =============================================
+    # FIREBASE PUSH NOTIFICATIONS
+    # =============================================
+    path('fcm/device/', FCMDeviceTokenView.as_view(), name='fcm-device'),
+    path('fcm/devices/', FCMDeviceTokenListDeleteView.as_view(), name='fcm-devices'),
+    path('fcm/devices/<int:token_id>/', FCMDeviceTokenListDeleteView.as_view(), name='fcm-device-delete'),
 ]

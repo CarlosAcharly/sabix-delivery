@@ -262,3 +262,54 @@ class DeviceToken(models.Model):
     
     def __str__(self):
         return f"{self.device_type} - {self.user.username}"
+
+# =============================================
+# TOKENS DE DISPOSITIVOS PARA FIREBASE
+# =============================================
+
+class FCMDeviceToken(models.Model):
+    """
+    Tokens de dispositivos para notificaciones push con Firebase
+    """
+    DEVICE_TYPES = (
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    )
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='fcm_tokens',
+        verbose_name=_('Usuario')
+    )
+    token = models.CharField(
+        max_length=255,
+        unique=True,
+        verbose_name=_('FCM Token')
+    )
+    device_type = models.CharField(
+        max_length=20,
+        choices=DEVICE_TYPES,
+        verbose_name=_('Tipo de dispositivo')
+    )
+    device_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name=_('Nombre del dispositivo')
+    )
+    is_active = models.BooleanField(default=True, verbose_name=_('Activo'))
+    is_production = models.BooleanField(default=True, verbose_name=_('Producción'))
+    last_used = models.DateTimeField(auto_now=True, verbose_name=_('Último uso'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Creado'))
+    
+    class Meta:
+        db_table = 'fcm_device_tokens'
+        verbose_name = _('Token FCM')
+        verbose_name_plural = _('Tokens FCM')
+        ordering = ['-last_used']
+        unique_together = ['user', 'token']
+    
+    def __str__(self):
+        return f"{self.device_type} - {self.user.username} - {self.token[:20]}..."
