@@ -8,7 +8,6 @@ from datetime import timedelta
 from .models import Order, OrderItem, DeliveryTracking
 from django.contrib.auth import get_user_model
 from geopy.distance import geodesic
-from django.db.models import Q
 from django.db import models  # ✅ Agregar esta línea
 
 User = get_user_model()
@@ -147,6 +146,31 @@ class AvailableOrdersView(generics.ListAPIView):
             status='ready',
             delivery_person__isnull=True
         ).order_by('-created_at')
+
+class DeliveryPersonOrdersView(generics.ListAPIView):
+    """
+    🆕 Vista para repartidores: Listar pedidos asignados al repartidor
+    Incluye pedidos en estado 'in_delivery' y 'delivered' (últimos 7 días)
+    """
+    serializer_class = OrderListSerializer
+    permission_classes = [IsAuthenticated, IsDeliveryUser]
+    
+    def get_queryset(self):
+        queryset = Order.objects.filter(delivery_person=self.request.user)
+        
+        # Filtro por estado (opcional)
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        else:
+            # Por defecto: pedidos activos + entregados recientemente (7 días)
+            seven_days_ago = timezone.now() - timedelta(days=7)
+            queryset = queryset.filter(
+                models.Q(status='in_delivery') |
+                models.Q(status='delivered', delivered_at__gte=seven_days_ago)
+            )
+        
+        return queryset.order_by('-created_at')
 
 class DeliveryOrderDetailView(generics.RetrieveAPIView):
     """

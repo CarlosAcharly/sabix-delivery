@@ -11,6 +11,7 @@ from .views import (
     
     # Repartidor
     AvailableOrdersView,
+    DeliveryPersonOrdersView,  # ✅ NUEVA
     DeliveryOrderDetailView,
     AcceptDeliveryView,
     UpdateDeliveryLocationView,
@@ -21,7 +22,7 @@ from .views import (
     AdminOrderDetailView,
     AdminOrderStatsView,
     
-    # Asignación de repartidores (NUEVAS)
+    # Asignación de repartidores
     FindNearestDeliveryPeopleView,
     AssignDeliveryView,
     AutoAssignDeliveryView,
@@ -43,9 +44,10 @@ urlpatterns = [
     path('restaurant/orders/<int:pk>/', RestaurantOrderDetailView.as_view(), name='restaurant-order-detail'),
     
     # =============================================
-    # ENDPOINTS PARA REPARTIDORES
+    # ENDPOINTS PARA REPARTIDORES (ACTUALIZADO)
     # =============================================
     path('delivery/available/', AvailableOrdersView.as_view(), name='delivery-available'),
+    path('delivery/orders/', DeliveryPersonOrdersView.as_view(), name='delivery-orders'),  # 🆕 NUEVO
     path('delivery/orders/<int:pk>/', DeliveryOrderDetailView.as_view(), name='delivery-order-detail'),
     path('delivery/orders/<int:order_id>/accept/', AcceptDeliveryView.as_view(), name='delivery-accept'),
     path('delivery/location/', UpdateDeliveryLocationView.as_view(), name='delivery-location'),
@@ -59,13 +61,10 @@ urlpatterns = [
     path('admin/stats/', AdminOrderStatsView.as_view(), name='admin-order-stats'),
     
     # =============================================
-    # NUEVOS ENDPOINTS - ASIGNACIÓN DE REPARTIDORES
+    # ASIGNACIÓN DE REPARTIDORES
     # =============================================
     path('delivery/find-nearest/', FindNearestDeliveryPeopleView.as_view(), name='delivery-find-nearest'),
     path('delivery/assign/', AssignDeliveryView.as_view(), name='delivery-assign'),
     path('delivery/auto-assign/', AutoAssignDeliveryView.as_view(), name='delivery-auto-assign'),
-    # =============================================
-    # NUEVO ENDPOINT - TODOS LOS REPARTIDORES
-    # =============================================
     path('delivery/all-available/', AllAvailableDeliveryPeopleView.as_view(), name='delivery-all-available'),
 ]
