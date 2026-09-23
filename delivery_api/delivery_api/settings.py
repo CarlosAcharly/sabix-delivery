@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'products',  
     'orders',
     'notifications',
+    'chat',
     'channels',
 ]
 
@@ -46,6 +47,14 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             "hosts": [('127.0.0.1', 6379)],
+            "symmetric_encryption_keys": [SECRET_KEY],
+            "capacity": 1000,
+            "expiry": 60,
+            "channel_capacity": {
+                "http.request": 200,
+                "websocket.send": 100,
+                "websocket.receive": 100,
+            },
         },
     },
 }

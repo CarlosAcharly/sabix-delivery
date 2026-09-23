@@ -19,6 +19,8 @@ urlpatterns = [
     # NOTIFICATIONS API - NUEVO
     # =============================================
     path('api/v1/notifications/', include('notifications.urls')),
+
+    path('api/v1/chat/', include('chat.urls')),
 ]
 
 # Solo para desarrollo - servir archivos estáticos y medias

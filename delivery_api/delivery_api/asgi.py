@@ -11,7 +11,12 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from channels.security.websocket import AllowedHostsOriginValidator
 
-from notifications.routing import websocket_urlpatterns
+# ✅ Importar rutas de WebSocket de cada app
+from notifications.routing import websocket_urlpatterns as notification_ws
+from chat.routing import websocket_urlpatterns as chat_ws
+
+# ✅ Combinar todas las rutas de WebSocket
+websocket_urlpatterns = notification_ws + chat_ws
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
