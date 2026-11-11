@@ -5,6 +5,7 @@ from .models import (
     ProductOption, ProductOptionChoice
 )
 from users.serializers import UserSerializer
+from PIL import Image
 
 # =============================================
 # SERIALIZERS DE CATEGORÍAS
@@ -64,7 +65,7 @@ class ProductOptionSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     """Serializer principal para productos"""
     restaurant_name = serializers.SerializerMethodField()
-    restaurant_id = serializers.SerializerMethodField()  # ✅ NUEVO
+    restaurant_id = serializers.SerializerMethodField()
     category_name = serializers.SerializerMethodField()
     global_category_name = serializers.SerializerMethodField()
     final_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -72,14 +73,15 @@ class ProductSerializer(serializers.ModelSerializer):
     options = ProductOptionSerializer(many=True, read_only=True)
     average_rating = serializers.SerializerMethodField()
     total_reviews = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField() # ✅ Aseguramos que esté aquí también
     
     class Meta:
         model = Product
         fields = [
-            'id', 'restaurant', 'restaurant_id', 'restaurant_name', 'category', 'category_name',  # ✅ Agregar restaurant_id
+            'id', 'restaurant', 'restaurant_id', 'restaurant_name', 'category', 'category_name',
             'global_category', 'global_category_name', 'name', 'description',
             'price', 'discount_price', 'final_price', 'has_discount',
-            'image', 'image_alt', 'is_available', 'is_featured', 'stock',
+            'image', 'image_url', 'image_alt', 'is_available', 'is_featured', 'stock',
             'preparation_time', 'is_vegetarian', 'is_vegan', 'is_gluten_free',
             'order', 'options', 'average_rating', 'total_reviews', 
             'created_at', 'updated_at'
@@ -89,7 +91,7 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_restaurant_name(self, obj):
         return obj.restaurant.restaurant_name if obj.restaurant else None
     
-    def get_restaurant_id(self, obj):  # ✅ NUEVO MÉTODO
+    def get_restaurant_id(self, obj):
         return obj.restaurant.id if obj.restaurant else None
     
     def get_category_name(self, obj):
@@ -97,6 +99,12 @@ class ProductSerializer(serializers.ModelSerializer):
     
     def get_global_category_name(self, obj):
         return obj.global_category.name if obj.global_category else None
+    
+    def get_image_url(self, obj):
+        # ✅ Esto devolverá la URL de S3 si el archivo existe
+        if obj.image and hasattr(obj.image, 'url'):
+            return obj.image.url
+        return None
     
     def get_average_rating(self, obj):
         return None
@@ -115,6 +123,17 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             'is_available', 'is_featured', 'stock', 'preparation_time',
             'is_vegetarian', 'is_vegan', 'is_gluten_free', 'order'
         ]
+    
+    # ✅ Validación opcional: Asegurar que la imagen no sea gigante
+    def validate_image(self, value):
+        if value:
+            # Validar que no pese más de 5MB (ajusta según necesites)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError("La imagen no puede pesar más de 5MB.")
+            # Opcional: Validar formato
+            # if not value.name.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            #     raise serializers.ValidationError("Solo se permiten formatos JPG, PNG o WEBP.")
+        return value
     
     def validate(self, data):
         # Validar que el precio con descuento sea menor que el precio normal
@@ -153,7 +172,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
 class ProductListSerializer(serializers.ModelSerializer):
     """Serializer ligero para listar productos"""
     restaurant_name = serializers.SerializerMethodField()
-    restaurant_id = serializers.SerializerMethodField()  # ✅ NUEVO
+    restaurant_id = serializers.SerializerMethodField()
     category_name = serializers.SerializerMethodField()
     final_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     image_url = serializers.SerializerMethodField()
@@ -164,20 +183,21 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'price', 'discount_price', 
             'final_price', 'image', 'image_url', 'is_available', 
-            'is_featured', 'restaurant_id', 'restaurant_name', 'category_name',  # ✅ Agregar restaurant_id
+            'is_featured', 'restaurant_id', 'restaurant_name', 'category_name',
             'average_rating', 'created_at'
         ]
     
     def get_restaurant_name(self, obj):
         return obj.restaurant.restaurant_name if obj.restaurant else None
     
-    def get_restaurant_id(self, obj):  # ✅ NUEVO MÉTODO
+    def get_restaurant_id(self, obj):
         return obj.restaurant.id if obj.restaurant else None
     
     def get_category_name(self, obj):
         return obj.category.name if obj.category else None
     
     def get_image_url(self, obj):
+        # ✅ Esto devolverá la URL de S3
         if obj.image and hasattr(obj.image, 'url'):
             return obj.image.url
         return None
