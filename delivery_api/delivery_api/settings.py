@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'chat',
     'channels',
     'storages', # ✅ AWS S3
+    'payments',
 ]
 
 CHANNEL_LAYERS = {

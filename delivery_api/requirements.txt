@@ -13,3 +13,4 @@ django-storages==1.14.6
 boto3==1.44.0
 setuptools<81
 firebase-admin==6.5.0
+geopy==2.4.1
