@@ -16,6 +16,7 @@ from .views import (
     AcceptDeliveryView,
     UpdateDeliveryLocationView,
     MarkOrderDeliveredView,
+    DeliveryClientLocationView,
     
     # Administrador
     AdminOrderListView,
@@ -52,6 +53,7 @@ urlpatterns = [
     path('delivery/orders/<int:order_id>/accept/', AcceptDeliveryView.as_view(), name='delivery-accept'),
     path('delivery/location/', UpdateDeliveryLocationView.as_view(), name='delivery-location'),
     path('delivery/orders/<int:order_id>/deliver/', MarkOrderDeliveredView.as_view(), name='delivery-deliver'),
+    path('delivery/orders/<int:order_id>/client-location/', DeliveryClientLocationView.as_view(), name='delivery-client-location'),
     
     # =============================================
     # ENDPOINTS PARA ADMINISTRADORES

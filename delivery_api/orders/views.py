@@ -700,3 +700,40 @@ class AllAvailableDeliveryPeopleView(APIView):
                 {'error': 'Error al obtener repartidores disponibles'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+# =============================================
+# VISTA PARA OBTENER LA UBICACIÓN DEL CLIENTE
+# =============================================
+
+class DeliveryClientLocationView(APIView):
+    """
+    Vista para repartidores: Obtener la ubicación exacta del cliente
+    Solo accesible si el repartidor tiene el pedido asignado.
+    """
+    permission_classes = [IsAuthenticated, IsDeliveryUser]
+
+    def get(self, request, order_id):
+        try:
+            # Solo el repartidor asignado puede ver la ubicación
+            order = Order.objects.get(id=order_id, delivery_person=request.user)
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Pedido no encontrado o no estás asignado a él'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if order.delivery_lat is None or order.delivery_lng is None:
+            return Response(
+                {'error': 'El cliente no proporcionó coordenadas para este pedido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response({
+            'order_id': order.id,
+            'client_name': order.client.get_full_name() or order.client.username,
+            'client_phone': order.client.phone or '',
+            'delivery_address': order.delivery_address,
+            'delivery_notes': order.delivery_notes or '',
+            'lat': float(order.delivery_lat),
+            'lng': float(order.delivery_lng),
+        }, status=status.HTTP_200_OK)
