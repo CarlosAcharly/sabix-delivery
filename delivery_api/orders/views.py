@@ -9,14 +9,16 @@ from .models import Order, OrderItem, DeliveryTracking
 from django.contrib.auth import get_user_model
 from geopy.distance import geodesic
 from django.db import models  # ✅ Agregar esta línea
+from django.db import transaction
 
 User = get_user_model()
 from .serializers import (
     OrderListSerializer, OrderDetailSerializer, OrderCreateSerializer,
     OrderUpdateStatusSerializer, OrderAssignDeliverySerializer,
-    DeliveryLocationSerializer
+    DeliveryLocationSerializer, DeliveryAssignmentSerializer
 )
 from users.permissions import IsClientUser, IsRestaurantUser, IsDeliveryUser, IsAdminUser
+from .dispatch import assign_nearest_delivery_person
 
 # =============================================
 # VISTAS PARA CLIENTES
@@ -124,10 +126,26 @@ class RestaurantOrderDetailView(generics.RetrieveUpdateAPIView):
         
         new_status = serializer.validated_data['status']
         order.update_status(new_status)
+
+        assignment = None
+        if new_status == 'ready':
+            assignment = assign_nearest_delivery_person(
+                order,
+                request.data.get('restaurant_lat'),
+                request.data.get('restaurant_lng'),
+            )
+            order.refresh_from_db()
         
         return Response({
             'message': f'Estado actualizado a {order.get_status_display()}',
-            'order': OrderDetailSerializer(order).data
+            'order': OrderDetailSerializer(order).data,
+            'assignment': DeliveryAssignmentSerializer(assignment).data if assignment else None,
+            'assignment_message': (
+                'Pedido asignado al repartidor más cercano; esperando aceptación.'
+                if assignment else
+                'No fue posible asignar un repartidor automáticamente; el pedido queda disponible.'
+                if new_status == 'ready' else None
+            ),
         })
 
 # =============================================
@@ -211,7 +229,16 @@ class AcceptDeliveryView(APIView):
 
             order.delivery_person = request.user
 
-        order.update_status('in_delivery')
+        with transaction.atomic():
+            assignment = order.assignments.filter(
+                delivery_person=request.user,
+                status='pending',
+            ).first()
+            if assignment:
+                assignment.status = 'accepted'
+                assignment.responded_at = timezone.now()
+                assignment.save(update_fields=['status', 'responded_at'])
+            order.update_status('in_delivery')
         
         return Response({
             'message': 'Pedido aceptado para entrega',
@@ -223,25 +250,64 @@ class RejectDeliveryView(APIView):
     permission_classes = [IsAuthenticated, IsDeliveryUser]
 
     def post(self, request, order_id):
-        try:
-            order = Order.objects.get(
-                id=order_id,
-                status='assigned',
-                delivery_person=request.user
-            )
-        except Order.DoesNotExist:
-            return Response(
-                {'error': 'Pedido no encontrado o no está asignado a ti'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        with transaction.atomic():
+            try:
+                order = Order.objects.select_for_update().get(
+                    id=order_id,
+                    status='assigned',
+                    delivery_person=request.user,
+                )
+            except Order.DoesNotExist:
+                return Response(
+                    {'error': 'Pedido no encontrado o no está asignado a ti'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-        order.delivery_person = None
-        order.update_status('ready')
+            assignment = order.assignments.select_for_update().filter(
+                delivery_person=request.user,
+                status='pending',
+            ).first()
 
-        return Response({
-            'message': 'Pedido rechazado. Ha vuelto a la lista de disponibles.',
-            'order_id': order.id,
-        })
+            if assignment:
+                assignment.status = 'rejected'
+                assignment.responded_at = timezone.now()
+                assignment.save(update_fields=['status', 'responded_at'])
+
+                order.delivery_person = None
+                order.save(update_fields=['delivery_person', 'updated_at'])
+                next_assignment = assign_nearest_delivery_person(
+                    order,
+                    assignment.restaurant_lat,
+                    assignment.restaurant_lng,
+                    allow_assigned=True,
+                )
+                if next_assignment:
+                    return Response({
+                        'message': (
+                            'Pedido rechazado y asignado al siguiente repartidor '
+                            'más cercano; esperando aceptación.'
+                        ),
+                        'order_id': order.id,
+                        'assignment': DeliveryAssignmentSerializer(next_assignment).data,
+                    })
+
+                order.status = 'ready'
+                order.save(update_fields=['status', 'updated_at'])
+                return Response({
+                    'message': (
+                        'Pedido rechazado. No hay más repartidores disponibles; '
+                        'el pedido queda disponible.'
+                    ),
+                    'order_id': order.id,
+                })
+
+            order.delivery_person = None
+            order.update_status('ready')
+
+            return Response({
+                'message': 'Pedido rechazado. Ha vuelto a la lista de disponibles.',
+                'order_id': order.id,
+            })
 
 class UpdateDeliveryLocationView(APIView):
     """
@@ -583,7 +649,7 @@ class AutoAssignDeliveryView(APIView):
     """
     Asignar automáticamente el repartidor más cercano
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsRestaurantUser | IsAdminUser]
     
     def post(self, request):
         order_id = request.data.get('order_id')
@@ -594,81 +660,40 @@ class AutoAssignDeliveryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        order_filters = {'id': order_id, 'status': 'ready', 'delivery_person__isnull': True}
+        if request.user.user_type == 'restaurant':
+            order_filters['restaurant'] = request.user
+
         try:
-            order = Order.objects.get(id=order_id, status='ready', delivery_person__isnull=True)
+            order = Order.objects.get(**order_filters)
         except Order.DoesNotExist:
             return Response(
                 {'error': 'Pedido no disponible para asignación'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Obtener coordenadas del restaurante
-        restaurant_lat = float(request.data.get('restaurant_lat', 0))
-        restaurant_lng = float(request.data.get('restaurant_lng', 0))
-        
-        if not restaurant_lat or not restaurant_lng:
-            # Intentar obtener del restaurante
-            restaurant = order.restaurant
-            if restaurant.current_location_lat and restaurant.current_location_lng:
-                restaurant_lat = float(restaurant.current_location_lat)
-                restaurant_lng = float(restaurant.current_location_lng)
-            else:
-                return Response(
-                    {'error': 'Coordenadas del restaurante no disponibles'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        # Buscar repartidor más cercano
-        nearest_delivery = None
-        min_distance = float('inf')
-        
-        available_deliveries = User.objects.filter(
-            user_type='delivery',
-            is_active=True,
-            is_available=True,
-            current_location_lat__isnull=False,
-            current_location_lng__isnull=False
-        ).exclude(
-            orders_as_delivery__status__in=['assigned', 'in_delivery']
+        assignment = assign_nearest_delivery_person(
+            order,
+            request.data.get('restaurant_lat'),
+            request.data.get('restaurant_lng'),
         )
-        
-        for delivery in available_deliveries:
-            try:
-                distance = geodesic(
-                    (restaurant_lat, restaurant_lng),
-                    (float(delivery.current_location_lat), float(delivery.current_location_lng))
-                ).kilometers
-            except (ValueError, TypeError):
-                continue
-            
-            if distance < min_distance:
-                min_distance = distance
-                nearest_delivery = delivery
-        
-        if not nearest_delivery:
+        if not assignment:
             return Response(
-                {'error': 'No hay repartidores disponibles cercanos'},
+                {'error': 'No hay repartidores disponibles con ubicación o faltan coordenadas del restaurante'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Asignar repartidor
-        order.delivery_person = nearest_delivery
-        order.update_status('in_delivery')
-        
+
+        nearest_delivery = assignment.delivery_person
         return Response({
-            'message': f'Pedido #{order.id} asignado automáticamente',
+            'message': f'Pedido #{order.id} asignado automáticamente; esperando aceptación.',
             'order': {
                 'id': order.id,
                 'status': order.status,
                 'status_display': order.get_status_display(),
                 'delivery_person_name': nearest_delivery.get_full_name() or nearest_delivery.username,
                 'delivery_person_phone': nearest_delivery.phone or '',
-                'in_delivery_at': order.in_delivery_at,
             },
-            'assignment': {
-                'distance_km': round(min_distance, 2),
-                'estimated_time': round(min_distance * 2, 0),
-            }
+            'assignment': DeliveryAssignmentSerializer(assignment).data,
         })
 
 # =============================================

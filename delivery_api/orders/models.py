@@ -392,10 +392,10 @@ class DeliveryAssignment(models.Model):
         ('expired', 'Expirado'),
     )
     
-    order = models.OneToOneField(
+    order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
-        related_name='assignment',
+        related_name='assignments',
         verbose_name=_('Pedido')
     )
     delivery_person = models.ForeignKey(
@@ -409,6 +409,20 @@ class DeliveryAssignment(models.Model):
         max_digits=10,
         decimal_places=2,
         verbose_name=_('Distancia en km')
+    )
+    restaurant_lat = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        verbose_name=_('Latitud del restaurante')
+    )
+    restaurant_lng = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        verbose_name=_('Longitud del restaurante')
     )
     estimated_time = models.IntegerField(
         verbose_name=_('Tiempo estimado (minutos)')
