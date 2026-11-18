@@ -14,6 +14,7 @@ from .views import (
     DeliveryPersonOrdersView,  # ✅ NUEVA
     DeliveryOrderDetailView,
     AcceptDeliveryView,
+    RejectDeliveryView,
     UpdateDeliveryLocationView,
     MarkOrderDeliveredView,
     DeliveryClientLocationView,
@@ -51,6 +52,7 @@ urlpatterns = [
     path('delivery/orders/', DeliveryPersonOrdersView.as_view(), name='delivery-orders'),  # 🆕 NUEVO
     path('delivery/orders/<int:pk>/', DeliveryOrderDetailView.as_view(), name='delivery-order-detail'),
     path('delivery/orders/<int:order_id>/accept/', AcceptDeliveryView.as_view(), name='delivery-accept'),
+    path('delivery/orders/<int:order_id>/reject/', RejectDeliveryView.as_view(), name='delivery-reject'),
     path('delivery/location/', UpdateDeliveryLocationView.as_view(), name='delivery-location'),
     path('delivery/orders/<int:order_id>/deliver/', MarkOrderDeliveredView.as_view(), name='delivery-deliver'),
     path('delivery/orders/<int:order_id>/client-location/', DeliveryClientLocationView.as_view(), name='delivery-client-location'),

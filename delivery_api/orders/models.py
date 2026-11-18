@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
@@ -16,6 +17,7 @@ class Order(models.Model):
         ('confirmed', 'Confirmado'),
         ('preparing', 'En preparación'),
         ('ready', 'Listo para entregar'),
+        ('assigned', 'Asignado al Repartidor'),
         ('in_delivery', 'En camino'),
         ('delivered', 'Entregado'),
         ('cancelled', 'Cancelado'),
@@ -189,17 +191,17 @@ class Order(models.Model):
         
         # Actualizar timestamps según el estado
         if new_status == 'confirmed' and not self.confirmed_at:
-            self.confirmed_at = models.functions.Now()
+            self.confirmed_at = timezone.now()
         elif new_status == 'preparing' and not self.preparing_at:
-            self.preparing_at = models.functions.Now()
+            self.preparing_at = timezone.now()
         elif new_status == 'ready' and not self.ready_at:
-            self.ready_at = models.functions.Now()
+            self.ready_at = timezone.now()
         elif new_status == 'in_delivery' and not self.in_delivery_at:
-            self.in_delivery_at = models.functions.Now()
+            self.in_delivery_at = timezone.now()
         elif new_status == 'delivered' and not self.delivered_at:
-            self.delivered_at = models.functions.Now()
+            self.delivered_at = timezone.now()
         elif new_status in ['cancelled', 'rejected'] and not self.cancelled_at:
-            self.cancelled_at = models.functions.Now()
+            self.cancelled_at = timezone.now()
         
         self.save()
     

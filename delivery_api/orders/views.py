@@ -166,6 +166,7 @@ class DeliveryPersonOrdersView(generics.ListAPIView):
             # Por defecto: pedidos activos + entregados recientemente (7 días)
             seven_days_ago = timezone.now() - timedelta(days=7)
             queryset = queryset.filter(
+                models.Q(status='assigned') |
                 models.Q(status='in_delivery') |
                 models.Q(status='delivered', delivered_at__gte=seven_days_ago)
             )
@@ -190,20 +191,56 @@ class AcceptDeliveryView(APIView):
     
     def post(self, request, order_id):
         try:
-            order = Order.objects.get(id=order_id, status='ready', delivery_person__isnull=True)
-        except Order.DoesNotExist:
-            return Response(
-                {'error': 'Pedido no disponible'},
-                status=status.HTTP_404_NOT_FOUND
+            order = Order.objects.get(
+                id=order_id,
+                status='assigned',
+                delivery_person=request.user
             )
-        
-        # Asignar repartidor
-        order.delivery_person = request.user
+        except Order.DoesNotExist:
+            try:
+                order = Order.objects.get(
+                    id=order_id,
+                    status='ready',
+                    delivery_person__isnull=True
+                )
+            except Order.DoesNotExist:
+                return Response(
+                    {'error': 'Pedido no disponible'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            order.delivery_person = request.user
+
         order.update_status('in_delivery')
         
         return Response({
             'message': 'Pedido aceptado para entrega',
             'order': OrderDetailSerializer(order).data
+        })
+
+class RejectDeliveryView(APIView):
+    """Permite al repartidor rechazar una asignación manual."""
+    permission_classes = [IsAuthenticated, IsDeliveryUser]
+
+    def post(self, request, order_id):
+        try:
+            order = Order.objects.get(
+                id=order_id,
+                status='assigned',
+                delivery_person=request.user
+            )
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Pedido no encontrado o no está asignado a ti'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        order.delivery_person = None
+        order.update_status('ready')
+
+        return Response({
+            'message': 'Pedido rechazado. Ha vuelto a la lista de disponibles.',
+            'order_id': order.id,
         })
 
 class UpdateDeliveryLocationView(APIView):
@@ -382,7 +419,7 @@ class AdminOrderStatsView(APIView):
             'avg_delivery_time': round(avg_delivery_time, 2),
             'pending_orders': Order.objects.filter(status='pending').count(),
             'in_progress': Order.objects.filter(
-                status__in=['confirmed', 'preparing', 'ready', 'in_delivery']
+                status__in=['confirmed', 'preparing', 'ready', 'assigned', 'in_delivery']
             ).count()
         }
         
@@ -437,7 +474,7 @@ class FindNearestDeliveryPeopleView(APIView):
             current_location_lat__isnull=False,
             current_location_lng__isnull=False
         ).exclude(
-            orders_as_delivery__status__in=['in_delivery']
+            orders_as_delivery__status__in=['assigned', 'in_delivery']
         )
         
         # Calcular distancias
@@ -518,25 +555,27 @@ class AssignDeliveryView(APIView):
             )
         
         # Verificar que no tenga pedidos activos
-        if Order.objects.filter(delivery_person=delivery_person, status='in_delivery').exists():
+        if Order.objects.filter(
+            delivery_person=delivery_person,
+            status__in=['assigned', 'in_delivery']
+        ).exists():
             return Response(
-                {'error': 'El repartidor ya tiene un pedido en curso'},
+                {'error': 'El repartidor ya tiene un pedido en curso o asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         # Asignar repartidor
         order.delivery_person = delivery_person
-        order.update_status('in_delivery')
+        order.update_status('assigned')
         
         return Response({
-            'message': f'Repartidor asignado exitosamente al pedido #{order.id}',
+            'message': f'Repartidor asignado al pedido #{order.id}. Esperando confirmación.',
             'order': {
                 'id': order.id,
                 'status': order.status,
                 'status_display': order.get_status_display(),
                 'delivery_person_name': delivery_person.get_full_name() or delivery_person.username,
                 'delivery_person_phone': delivery_person.phone or '',
-                'in_delivery_at': order.in_delivery_at,
             }
         })
 
@@ -590,7 +629,7 @@ class AutoAssignDeliveryView(APIView):
             current_location_lat__isnull=False,
             current_location_lng__isnull=False
         ).exclude(
-            orders_as_delivery__status__in=['in_delivery']
+            orders_as_delivery__status__in=['assigned', 'in_delivery']
         )
         
         for delivery in available_deliveries:
@@ -652,7 +691,7 @@ class AllAvailableDeliveryPeopleView(APIView):
                 is_available=True
             ).exclude(
                 # Excluir repartidores que tienen pedidos en curso
-                orders_as_delivery__status__in=['in_delivery']
+                orders_as_delivery__status__in=['assigned', 'in_delivery']
             ).distinct()
             
             # Serializar manualmente para incluir información adicional
