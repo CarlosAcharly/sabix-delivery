@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -128,6 +130,14 @@ class UserLoginSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
+    current_location_lat = serializers.DecimalField(
+        max_digits=10, decimal_places=7, min_value=Decimal('-90'), max_value=Decimal('90'),
+        allow_null=True, read_only=True
+    )
+    current_location_lng = serializers.DecimalField(
+        max_digits=10, decimal_places=7, min_value=Decimal('-180'), max_value=Decimal('180'),
+        allow_null=True, read_only=True
+    )
     
     class Meta:
         model = User
@@ -135,6 +145,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name', 
             'full_name', 'phone', 'user_type', 'profile_image',
             'address', 'vehicle_type', 'vehicle_plate', 'is_available',
+            'current_location_lat', 'current_location_lng',
             'restaurant_name', 'restaurant_description', 'restaurant_address',
             'is_restaurant_verified', 'is_active', 'created_at'
         ]
@@ -143,11 +154,21 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.get_full_name()
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    current_location_lat = serializers.DecimalField(
+        max_digits=10, decimal_places=7, min_value=Decimal('-90'), max_value=Decimal('90'),
+        allow_null=True, required=False
+    )
+    current_location_lng = serializers.DecimalField(
+        max_digits=10, decimal_places=7, min_value=Decimal('-180'), max_value=Decimal('180'),
+        allow_null=True, required=False
+    )
+
     class Meta:
         model = User
         fields = [
             'first_name', 'last_name', 'phone', 'profile_image',
             'address', 'vehicle_type', 'vehicle_plate', 'is_available',
+            'current_location_lat', 'current_location_lng',
             'restaurant_name', 'restaurant_description', 'restaurant_address'
         ]
     
@@ -162,7 +183,8 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
                      'vehicle_type', 'vehicle_plate', 'is_available']
         elif user_type == 'restaurant':
             fields = ['first_name', 'last_name', 'phone', 'profile_image',
-                     'restaurant_name', 'restaurant_description', 'restaurant_address']
+                     'restaurant_name', 'restaurant_description', 'restaurant_address',
+                     'current_location_lat', 'current_location_lng']
         else:
             fields = ['first_name', 'last_name', 'phone', 'profile_image']
         
