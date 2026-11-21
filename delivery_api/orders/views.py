@@ -320,39 +320,53 @@ class UpdateDeliveryLocationView(APIView):
         serializer = DeliveryLocationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        order_id = serializer.validated_data['order_id']
+        order_id = serializer.validated_data.get('order_id')
         lat = serializer.validated_data['lat']
         lng = serializer.validated_data['lng']
-        
-        try:
-            order = Order.objects.get(
-                id=order_id,
-                delivery_person=request.user,
-                status='in_delivery'
-            )
-        except Order.DoesNotExist:
-            return Response(
-                {'error': 'Pedido no encontrado o no asignado'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Actualizar tracking
-        if hasattr(order, 'tracking'):
-            order.tracking.update_location(lat, lng)
-        else:
-            DeliveryTracking.objects.create(
-                order=order,
-                current_lat=lat,
-                current_lng=lng
-            )
-        
-        return Response({
-            'message': 'Ubicación actualizada',
-            'tracking': {
+
+        order = None
+        if order_id is not None:
+            try:
+                order = Order.objects.get(
+                    id=order_id,
+                    delivery_person=request.user,
+                    status='in_delivery'
+                )
+            except Order.DoesNotExist:
+                return Response(
+                    {'error': 'Pedido no encontrado o no asignado'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        with transaction.atomic():
+            request.user.current_location_lat = lat
+            request.user.current_location_lng = lng
+            request.user.save(update_fields=[
+                'current_location_lat',
+                'current_location_lng',
+            ])
+
+            if order is not None:
+                if hasattr(order, 'tracking'):
+                    order.tracking.update_location(lat, lng)
+                else:
+                    DeliveryTracking.objects.create(
+                        order=order,
+                        current_lat=lat,
+                        current_lng=lng,
+                    )
+
+        tracking = None
+        if order is not None:
+            tracking = {
                 'current_lat': str(lat),
                 'current_lng': str(lng),
                 'last_update': timezone.now()
             }
+        return Response({
+            'message': 'Ubicación actualizada',
+            'location': {'lat': str(lat), 'lng': str(lng)},
+            'tracking': tracking,
         })
 
 class MarkOrderDeliveredView(APIView):

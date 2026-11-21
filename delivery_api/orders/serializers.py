@@ -239,9 +239,19 @@ class OrderAssignDeliverySerializer(serializers.Serializer):
 
 class DeliveryLocationSerializer(serializers.Serializer):
     """Serializer para actualizar ubicación del repartidor"""
-    lat = serializers.DecimalField(max_digits=10, decimal_places=7)
-    lng = serializers.DecimalField(max_digits=10, decimal_places=7)
-    order_id = serializers.IntegerField()
+    lat = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        min_value=Decimal('-90'),
+        max_value=Decimal('90'),
+    )
+    lng = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        min_value=Decimal('-180'),
+        max_value=Decimal('180'),
+    )
+    order_id = serializers.IntegerField(required=False)
 
     # =============================================
 # SERIALIZERS PARA ASIGNACIÓN DE REPARTIDORES

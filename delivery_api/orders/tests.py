@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from .models import DeliveryAssignment, Order
+from .models import DeliveryAssignment, DeliveryTracking, Order
 
 User = get_user_model()
 
@@ -96,6 +96,100 @@ class ManualDeliveryAssignmentTests(APITestCase):
         response = self.client.get(reverse('delivery-available'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual([order['id'] for order in response.data], [self.order.id])
+
+
+class DeliveryLocationUpdateTests(APITestCase):
+    def setUp(self):
+        self.delivery_person = User.objects.create_user(
+            username='tracking-courier',
+            password='test-password',
+            user_type='delivery',
+        )
+        self.client_user = User.objects.create_user(
+            username='tracking-customer',
+            password='test-password',
+            user_type='client',
+        )
+        self.restaurant = User.objects.create_user(
+            username='tracking-restaurant',
+            password='test-password',
+            user_type='restaurant',
+        )
+        self.order = Order.objects.create(
+            client=self.client_user,
+            restaurant=self.restaurant,
+            delivery_person=self.delivery_person,
+            status='in_delivery',
+            subtotal=Decimal('100.00'),
+            delivery_fee=Decimal('10.00'),
+            total=Decimal('110.00'),
+            delivery_address='Test address',
+        )
+        self.tracking = DeliveryTracking.objects.create(
+            order=self.order,
+            current_lat=Decimal('19.4000000'),
+            current_lng=Decimal('-99.1000000'),
+        )
+        self.client.force_authenticate(self.delivery_person)
+
+    def test_location_update_saves_tracking_and_dispatch_coordinates(self):
+        response = self.client.post(
+            reverse('delivery-location'),
+            {
+                'order_id': self.order.id,
+                'lat': '19.4326000',
+                'lng': '-99.1332000',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.delivery_person.refresh_from_db()
+        self.tracking.refresh_from_db()
+        self.assertEqual(
+            self.delivery_person.current_location_lat,
+            Decimal('19.4326000'),
+        )
+        self.assertEqual(
+            self.delivery_person.current_location_lng,
+            Decimal('-99.1332000'),
+        )
+        self.assertEqual(self.tracking.current_lat, Decimal('19.4326000'))
+        self.assertEqual(self.tracking.current_lng, Decimal('-99.1332000'))
+
+    def test_location_update_rejects_out_of_range_coordinates(self):
+        response = self.client.post(
+            reverse('delivery-location'),
+            {
+                'order_id': self.order.id,
+                'lat': '91',
+                'lng': '-99.1332000',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_location_can_be_updated_before_order_assignment(self):
+        response = self.client.post(
+            reverse('delivery-location'),
+            {'lat': '19.4326000', 'lng': '-99.1332000'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.delivery_person.refresh_from_db()
+        self.tracking.refresh_from_db()
+        self.assertEqual(
+            self.delivery_person.current_location_lat,
+            Decimal('19.4326000'),
+        )
+        self.assertEqual(
+            self.delivery_person.current_location_lng,
+            Decimal('-99.1332000'),
+        )
+        self.assertEqual(self.tracking.current_lat, Decimal('19.4000000'))
+        self.assertIsNone(response.data['tracking'])
 
 
 class AutomaticDeliveryAssignmentTests(APITestCase):

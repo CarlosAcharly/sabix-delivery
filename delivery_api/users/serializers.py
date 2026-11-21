@@ -180,7 +180,8 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
             fields = ['first_name', 'last_name', 'phone', 'profile_image', 'address']
         elif user_type == 'delivery':
             fields = ['first_name', 'last_name', 'phone', 'profile_image', 
-                     'vehicle_type', 'vehicle_plate', 'is_available']
+                     'vehicle_type', 'vehicle_plate', 'is_available',
+                     'current_location_lat', 'current_location_lng']
         elif user_type == 'restaurant':
             fields = ['first_name', 'last_name', 'phone', 'profile_image',
                      'restaurant_name', 'restaurant_description', 'restaurant_address',
