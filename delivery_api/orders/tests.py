@@ -144,6 +144,39 @@ class AutomaticDeliveryAssignmentTests(APITestCase):
             format='json',
         )
 
+    def test_find_nearest_uses_saved_restaurant_coordinates(self):
+        self.order.status = 'ready'
+        self.order.save(update_fields=['status'])
+        self.client.force_authenticate(self.restaurant)
+
+        response = self.client.post(
+            reverse('delivery-find-nearest'),
+            {'order_id': self.order.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['available_delivery_people'][0]['id'],
+            self.nearest_delivery_person.id,
+        )
+
+    def test_auto_assign_without_available_drivers_returns_conflict(self):
+        self.order.status = 'ready'
+        self.order.save(update_fields=['status'])
+        User.objects.filter(
+            id__in=[self.nearest_delivery_person.id, self.next_delivery_person.id]
+        ).update(is_available=False)
+        self.client.force_authenticate(self.restaurant)
+
+        response = self.client.post(
+            reverse('delivery-auto-assign'),
+            {'order_id': self.order.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 409)
+
     def test_ready_order_is_offered_to_nearest_active_driver(self):
         response = self.mark_order_ready()
 

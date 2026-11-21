@@ -518,18 +518,44 @@ class FindNearestDeliveryPeopleView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        if not restaurant_lat or not restaurant_lng:
-            return Response(
-                {'error': 'Coordenadas del restaurante requeridas'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         try:
             order = Order.objects.get(id=order_id, status='ready')
         except Order.DoesNotExist:
             return Response(
                 {'error': 'Pedido no disponible para asignación'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+        if request.user.user_type == 'restaurant' and order.restaurant_id != request.user.id:
+            return Response(
+                {'error': 'Pedido no disponible para asignación'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if restaurant_lat in (None, ''):
+            restaurant_lat = order.restaurant.current_location_lat
+        if restaurant_lng in (None, ''):
+            restaurant_lng = order.restaurant.current_location_lng
+        try:
+            restaurant_lat = float(restaurant_lat)
+            restaurant_lng = float(restaurant_lng)
+            radius_km = float(radius_km)
+            limit = int(limit)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'Coordenadas, radio y límite deben ser valores numéricos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if (
+            not -90 <= restaurant_lat <= 90
+            or not -180 <= restaurant_lng <= 180
+            or radius_km < 0
+            or limit < 1
+        ):
+            return Response(
+                {'error': 'Coordenadas, radio o límite fuera de rango'},
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # Buscar repartidores disponibles
@@ -680,7 +706,7 @@ class AutoAssignDeliveryView(APIView):
         if not assignment:
             return Response(
                 {'error': 'No hay repartidores disponibles con ubicación o faltan coordenadas del restaurante'},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_409_CONFLICT
             )
 
         nearest_delivery = assignment.delivery_person

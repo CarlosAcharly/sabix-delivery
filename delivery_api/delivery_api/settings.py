@@ -283,9 +283,9 @@ try:
     if os.path.exists(FIREBASE_CREDENTIALS_FILE):
         cred = credentials.Certificate(FIREBASE_CREDENTIALS_FILE)
         firebase_app = firebase_admin.initialize_app(cred)
-        print("✅ Firebase inicializado correctamente")
+        print("Firebase inicializado correctamente")
     else:
-        print(f"⚠️ Archivo de credenciales Firebase no encontrado")
-        print(f"📌 Ruta esperada: {FIREBASE_CREDENTIALS_FILE}")
+        print("Archivo de credenciales Firebase no encontrado")
+        print(f"Ruta esperada: {FIREBASE_CREDENTIALS_FILE}")
 except Exception as e:
-    print(f"❌ Error inicializando Firebase: {e}")
+    print(f"Error inicializando Firebase: {e}")
