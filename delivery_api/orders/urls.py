@@ -23,6 +23,7 @@ from .views import (
     AdminOrderListView,
     AdminOrderDetailView,
     AdminOrderStatsView,
+    AdminDeliveryAssignmentListView,
     
     # Asignación de repartidores
     FindNearestDeliveryPeopleView,
@@ -63,6 +64,7 @@ urlpatterns = [
     path('admin/orders/', AdminOrderListView.as_view(), name='admin-orders'),
     path('admin/orders/<int:pk>/', AdminOrderDetailView.as_view(), name='admin-order-detail'),
     path('admin/stats/', AdminOrderStatsView.as_view(), name='admin-order-stats'),
+    path('admin/assignments/', AdminDeliveryAssignmentListView.as_view(), name='admin-assignments'),
     
     # =============================================
     # ASIGNACIÓN DE REPARTIDORES

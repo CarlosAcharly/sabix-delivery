@@ -188,6 +188,21 @@ class AutomaticDeliveryAssignmentTests(APITestCase):
         self.assertEqual(assignment.status, 'pending')
         self.assertEqual(response.data['order']['status'], 'assigned')
 
+    def test_auto_assign_retry_returns_existing_pending_assignment(self):
+        self.mark_order_ready()
+        assignment = DeliveryAssignment.objects.get(order=self.order)
+
+        self.client.force_authenticate(self.restaurant)
+        response = self.client.post(
+            reverse('delivery-auto-assign'),
+            {'order_id': self.order.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['assignment']['id'], assignment.id)
+        self.assertEqual(DeliveryAssignment.objects.filter(order=self.order).count(), 1)
+
     def test_driver_acceptance_updates_the_assignment_and_order(self):
         self.mark_order_ready()
 
@@ -255,3 +270,62 @@ class AutomaticDeliveryAssignmentTests(APITestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'ready')
         self.assertIsNone(self.order.delivery_person)
+
+
+class AdminDeliveryAssignmentListTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username='admin',
+            password='test-password',
+            user_type='admin',
+        )
+        self.restaurant = User.objects.create_user(
+            username='admin-list-restaurant',
+            password='test-password',
+            user_type='restaurant',
+        )
+        self.client_user = User.objects.create_user(
+            username='admin-list-customer',
+            password='test-password',
+            user_type='client',
+        )
+        self.delivery_person = User.objects.create_user(
+            username='admin-list-courier',
+            password='test-password',
+            user_type='delivery',
+        )
+        self.order = Order.objects.create(
+            client=self.client_user,
+            restaurant=self.restaurant,
+            delivery_person=self.delivery_person,
+            status='assigned',
+            subtotal=Decimal('100.00'),
+            delivery_fee=Decimal('10.00'),
+            total=Decimal('110.00'),
+            delivery_address='Test address',
+        )
+        DeliveryAssignment.objects.create(
+            order=self.order,
+            delivery_person=self.delivery_person,
+            distance_km=Decimal('1.25'),
+            estimated_time=3,
+        )
+
+    def test_admin_can_list_paginated_assignments(self):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(
+            reverse('admin-assignments'),
+            {'page': 1, 'page_size': 10},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['order_id'], self.order.id)
+
+    def test_non_admin_cannot_list_assignments(self):
+        self.client.force_authenticate(self.restaurant)
+
+        response = self.client.get(reverse('admin-assignments'))
+
+        self.assertEqual(response.status_code, 403)

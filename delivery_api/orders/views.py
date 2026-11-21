@@ -2,10 +2,11 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from datetime import timedelta
-from .models import Order, OrderItem, DeliveryTracking
+from .models import Order, OrderItem, DeliveryAssignment, DeliveryTracking
 from django.contrib.auth import get_user_model
 from geopy.distance import geodesic
 from django.db import models  # ✅ Agregar esta línea
@@ -490,14 +491,28 @@ class AdminOrderStatsView(APIView):
         }
         
         return Response(stats)
-    
-    # =============================================
+
+class AdminDeliveryAssignmentPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class AdminDeliveryAssignmentListView(generics.ListAPIView):
+    """Lista asignaciones de repartidores para el panel administrativo."""
+    serializer_class = DeliveryAssignmentSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    pagination_class = AdminDeliveryAssignmentPagination
+
+    def get_queryset(self):
+        return DeliveryAssignment.objects.select_related(
+            'order',
+            'delivery_person',
+        ).order_by('-assigned_at')
+
+# =============================================
 # VISTAS PARA ASIGNACIÓN DE REPARTIDORES
 # =============================================
-
-from geopy.distance import geodesic
-from django.db.models import Q
-from .models import DeliveryAssignment
 
 class FindNearestDeliveryPeopleView(APIView):
     """
@@ -676,6 +691,22 @@ class AutoAssignDeliveryView(APIView):
     Asignar automáticamente el repartidor más cercano
     """
     permission_classes = [IsAuthenticated, IsRestaurantUser | IsAdminUser]
+
+    @staticmethod
+    def assignment_response(assignment):
+        delivery_person = assignment.delivery_person
+        order = assignment.order
+        return Response({
+            'message': f'Pedido #{order.id} asignado automáticamente; esperando aceptación.',
+            'order': {
+                'id': order.id,
+                'status': order.status,
+                'status_display': order.get_status_display(),
+                'delivery_person_name': delivery_person.get_full_name() or delivery_person.username,
+                'delivery_person_phone': delivery_person.phone or '',
+            },
+            'assignment': DeliveryAssignmentSerializer(assignment).data,
+        })
     
     def post(self, request):
         order_id = request.data.get('order_id')
@@ -686,12 +717,30 @@ class AutoAssignDeliveryView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        order_filters = {'id': order_id, 'status': 'ready', 'delivery_person__isnull': True}
+        order_filters = {'id': order_id}
         if request.user.user_type == 'restaurant':
             order_filters['restaurant'] = request.user
 
+        assignment_filters = {
+            'order__id': order_id,
+            'order__status': 'assigned',
+            'status': 'pending',
+        }
+        if request.user.user_type == 'restaurant':
+            assignment_filters['order__restaurant'] = request.user
+
+        existing_assignment = DeliveryAssignment.objects.filter(
+            **assignment_filters,
+        ).select_related('order', 'delivery_person').first()
+        if existing_assignment:
+            return self.assignment_response(existing_assignment)
+
         try:
-            order = Order.objects.get(**order_filters)
+            order = Order.objects.get(
+                **order_filters,
+                status='ready',
+                delivery_person__isnull=True,
+            )
         except Order.DoesNotExist:
             return Response(
                 {'error': 'Pedido no disponible para asignación'},
@@ -704,23 +753,18 @@ class AutoAssignDeliveryView(APIView):
             request.data.get('restaurant_lng'),
         )
         if not assignment:
+            existing_assignment = DeliveryAssignment.objects.filter(
+                **assignment_filters,
+            ).select_related('order', 'delivery_person').first()
+            if existing_assignment:
+                return self.assignment_response(existing_assignment)
+
             return Response(
                 {'error': 'No hay repartidores disponibles con ubicación o faltan coordenadas del restaurante'},
                 status=status.HTTP_409_CONFLICT
             )
 
-        nearest_delivery = assignment.delivery_person
-        return Response({
-            'message': f'Pedido #{order.id} asignado automáticamente; esperando aceptación.',
-            'order': {
-                'id': order.id,
-                'status': order.status,
-                'status_display': order.get_status_display(),
-                'delivery_person_name': nearest_delivery.get_full_name() or nearest_delivery.username,
-                'delivery_person_phone': nearest_delivery.phone or '',
-            },
-            'assignment': DeliveryAssignmentSerializer(assignment).data,
-        })
+        return self.assignment_response(assignment)
 
 # =============================================
 # VISTA PARA OBTENER TODOS LOS REPARTIDORES DISPONIBLES
