@@ -9,6 +9,53 @@ from .models import DeliveryAssignment, DeliveryTracking, Order
 User = get_user_model()
 
 
+class ClientOrderDetailTests(APITestCase):
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            username='order-customer',
+            password='test-password',
+            user_type='client',
+        )
+        self.other_client = User.objects.create_user(
+            username='other-order-customer',
+            password='test-password',
+            user_type='client',
+        )
+        self.restaurant = User.objects.create_user(
+            username='order-restaurant',
+            password='test-password',
+            user_type='restaurant',
+        )
+        self.order = Order.objects.create(
+            client=self.client_user,
+            restaurant=self.restaurant,
+            status='delivered',
+            subtotal=Decimal('66.00'),
+            delivery_fee=Decimal('20.00'),
+            total=Decimal('86.00'),
+            delivery_address='Test address',
+        )
+
+    def test_client_can_retrieve_own_order_detail(self):
+        self.client.force_authenticate(self.client_user)
+
+        response = self.client.get(
+            reverse('client-order-detail', args=[self.order.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], self.order.id)
+
+    def test_client_cannot_retrieve_another_clients_order(self):
+        self.client.force_authenticate(self.other_client)
+
+        response = self.client.get(
+            reverse('client-order-detail', args=[self.order.id])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
 class ManualDeliveryAssignmentTests(APITestCase):
     def setUp(self):
         self.restaurant = User.objects.create_user(

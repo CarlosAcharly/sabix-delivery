@@ -49,6 +49,8 @@ class IsClientUser(permissions.BasePermission):
         """
         Cliente solo sobre sus propios objetos
         """
+        if hasattr(obj, 'client'):
+            return obj.client.id == request.user.id
         if hasattr(obj, 'user'):
             return obj.user.id == request.user.id
         if hasattr(obj, 'id') and obj.id == request.user.id:
